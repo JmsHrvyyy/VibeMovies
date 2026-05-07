@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom"; // Import Link para sa navigation
 import { loginWithGoogle, logout } from "../services/auth";
 
 const Navbar = ({ onSearch, toggleSidebar, user }) => {
@@ -12,6 +13,7 @@ const Navbar = ({ onSearch, toggleSidebar, user }) => {
   return (
     <nav className="bg-gray-900 border-b border-gray-800 px-4 md:px-6 py-4 sticky top-0 z-50 shadow-xl">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 md:gap-4">
+        {/* Logo Section */}
         <div className="flex items-center gap-2 md:gap-4">
           <button
             onClick={toggleSidebar}
@@ -32,25 +34,29 @@ const Navbar = ({ onSearch, toggleSidebar, user }) => {
               />
             </svg>
           </button>
-          <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent truncate max-w-[120px] md:max-w-none">
-            VibeMovies
-          </h1>
+          <Link to="/">
+            <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent truncate max-w-[120px] md:max-w-none">
+              VibeMovies
+            </h1>
+          </Link>
         </div>
 
+        {/* Search Bar Section */}
         <form
           onSubmit={handleSubmit}
           className="relative flex-1 max-w-md mx-2 md:mx-0"
         >
+          <div className="absolute inset-0 bg-white/5 backdrop-blur-xl rounded-full border border-white/10"></div>
           <input
             type="text"
-            placeholder="Search..."
-            className="w-full bg-gray-800 text-white pl-9 pr-4 py-2 rounded-full border border-gray-700 text-sm focus:outline-none focus:border-blue-500"
+            placeholder="Search movies..."
+            className="relative w-full bg-transparent text-white pl-10 pr-4 py-2 rounded-full text-sm focus:outline-none placeholder:text-gray-500"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className="h-4 w-4 text-gray-400 absolute left-3 top-3"
+            className="h-4 w-4 text-gray-500 absolute left-4 top-3"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -64,19 +70,26 @@ const Navbar = ({ onSearch, toggleSidebar, user }) => {
           </svg>
         </form>
 
+        {/* User / Login Section */}
         <div className="flex items-center gap-4">
           {user ? (
             <div className="flex items-center gap-3">
               <span className="hidden md:block text-sm text-gray-300">
-                Hi, {user.displayName.split(" ")[0]}!
+                {user.displayName.split(" ")[0]}
               </span>
-              <img
-                src={user.photoURL}
-                alt="Profile"
-                className="w-10 h-10 rounded-full border-2 border-blue-500 cursor-pointer"
+              <Link to="/profile">
+                <img
+                  src={user.photoURL}
+                  alt="Profile"
+                  className="w-10 h-10 rounded-full border-2 border-blue-500 hover:scale-105 transition-transform cursor-pointer"
+                />
+              </Link>
+              <button
                 onClick={logout}
-                title="Click to Logout"
-              />
+                className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+              >
+                Logout
+              </button>
             </div>
           ) : (
             <button
