@@ -22,15 +22,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 1024) setIsSidebarOpen(false);
-      else setIsSidebarOpen(true);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  useEffect(() => {
     loadTrending();
   }, []);
 
@@ -54,28 +45,29 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-[#0f172a] bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-blue-900/20 via-slate-900 to-black text-white">
+      <div className="min-h-screen bg-[#080d17] text-white flex flex-col">
         <Navbar
-          user={user}
           onSearch={handleSearch}
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          user={user}
         />
 
-        <div className="flex">
-          {/* Isang beses lang dapat ipasa ang props dito */}
-          <Sidebar isOpen={isSidebarOpen} user={user} />
+        <div className="flex flex-1 relative">
+          {/* Sa loob ng App.jsx return statement */}
+          <Sidebar
+            isOpen={isSidebarOpen}
+            setIsOpen={setIsSidebarOpen} // ITO ANG DAGDAG
+            user={user}
+          />
 
-          <main className="flex-1 transition-all duration-300">
+          <main className="flex-1 min-w-0 bg-[#080d17]">
             <Routes>
-              {/* HOME ROUTE */}
               <Route
                 path="/"
                 element={
                   <div className="p-4 md:p-8">
                     <header className="mb-8 flex justify-between items-center">
-                      <h2 className="text-2xl font-bold text-gray-200">
-                        Explore Movies
-                      </h2>
+                      <h2 className="text-2xl font-bold">Explore Movies</h2>
                       <div className="text-sm text-gray-400 bg-gray-800 px-3 py-1 rounded-full border border-gray-700">
                         {movies.length} Movies Found
                       </div>
@@ -83,7 +75,7 @@ function App() {
 
                     {loading ? (
                       <div className="flex justify-center h-64 items-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-500"></div>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
@@ -95,8 +87,6 @@ function App() {
                   </div>
                 }
               />
-
-              {/* PROFILE ROUTE */}
               <Route path="/profile" element={<Profile user={user} />} />
             </Routes>
           </main>
