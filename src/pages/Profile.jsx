@@ -7,11 +7,15 @@ const Profile = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalType, setModalType] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [profileData, setProfileData] = useState({
     bio: "",
     favoriteMovieCover: "",
+    favGenres: [],
+    favActors: [],
+    favMovies: [],
   });
 
   useEffect(() => {
@@ -20,7 +24,14 @@ const Profile = ({ user }) => {
         try {
           const docRef = doc(db, "users", user.uid);
           const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) setProfileData(docSnap.data());
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setProfileData({
+              ...data,
+              favGenres: data.favGenres || [], // Fallback sa empty array
+              favActors: data.favActors || [], // Fallback sa empty array
+            });
+          }
         } catch (error) {
           console.error("Error fetching profile:", error);
         } finally {
@@ -33,12 +44,11 @@ const Profile = ({ user }) => {
 
   const handleSaveBio = async () => {
     try {
-      await setDoc(
-        doc(db, "users", user.uid),
-        { bio: profileData.bio },
-        { merge: true },
-      );
+      const userDoc = doc(db, "users", user.uid);
+      // Gagamit tayo ng { merge: true } para bio lang ang mabago
+      await setDoc(userDoc, { bio: profileData.bio }, { merge: true });
       setIsEditingBio(false);
+      console.log("Bio saved!");
     } catch (error) {
       console.error("Error saving bio:", error);
     }
@@ -54,27 +64,136 @@ const Profile = ({ user }) => {
 
   const selectCover = async (movie) => {
     const newCover = movie.backdrop_path;
-    setProfileData({ ...profileData, favoriteMovieCover: newCover });
-    await setDoc(
-      doc(db, "users", user.uid),
-      { favoriteMovieCover: newCover },
-      { merge: true },
-    );
-    setIsModalOpen(false);
+    try {
+      const userDoc = doc(db, "users", user.uid);
+      await setDoc(userDoc, { favoriteMovieCover: newCover }, { merge: true });
+
+      // I-update ang local state para makita agad ang change
+      setProfileData((prev) => ({ ...prev, favoriteMovieCover: newCover }));
+      setIsModalOpen(false);
+      setSearchTerm("");
+      setSearchResults([]);
+    } catch (error) {
+      console.error("Error saving cover:", error);
+    }
   };
 
   if (loading)
     return <div className="p-10 text-center">Loading Profile...</div>;
 
+  const updateProfileArray = async (field, newData) => {
+    setProfileData((prev) => ({ ...prev, [field]: newData }));
+    await setDoc(
+      doc(db, "users", user.uid),
+      { [field]: newData },
+      { merge: true },
+    );
+  };
+
+  const staticGenres = [
+    "Action",
+    "Comedy",
+    "Drama",
+    "Horror",
+    "Sci-Fi",
+    "Romance",
+    "Thriller",
+    "Animation",
+    "Documentary",
+    "Fantasy",
+  ];
+
+  const saveData = async (newData) => {
+    try {
+      const userDoc = doc(db, "users", user.uid);
+      await setDoc(userDoc, newData, { merge: true });
+      setProfileData((prev) => ({ ...prev, ...newData }));
+    } catch (error) {
+      console.error("Save failed:", error);
+    }
+  };
+
+  const handleAddGenre = (genre) => {
+    if (
+      profileData.favGenres.length < 3 &&
+      !profileData.favGenres.includes(genre)
+    ) {
+      const newGenres = [...profileData.favGenres, genre];
+      saveData({ favGenres: newGenres });
+    }
+  };
+
+  const removeGenre = (genre) => {
+    const newGenres = profileData.favGenres.filter((g) => g !== genre);
+    saveData({ favGenres: newGenres });
+  };
+
+  const searchPeople = async (query) => {
+    setSearchTerm(query);
+    if (query.length > 2) {
+      try {
+        // Palitan ang YOUR_API_KEY_HERE ng totoong key mo
+        const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
+        const res = await fetch(
+          `https://api.themoviedb.org/3/search/person?api_key=${API_KEY}&query=${query}`,
+        );
+        const data = await res.json();
+        setSearchResults(data.results || []);
+      } catch (error) {
+        console.error("Actor search failed:", error);
+      }
+    }
+  };
+
+  const addActor = (person) => {
+    if (profileData.favActors.length < 3) {
+      const newActor = {
+        id: person.id,
+        name: person.name,
+        image: person.profile_path
+          ? `https://image.tmdb.org/t/p/w185${person.profile_path}`
+          : null,
+      };
+      saveData({ favActors: [...profileData.favActors, newActor] });
+      setIsModalOpen(false);
+    }
+  };
+
+  const addMovie = (movie) => {
+    // Siguraduhin na may fallback array ( || [] )
+    const currentMovies = profileData.favMovies || [];
+
+    if (currentMovies.length < 5) {
+      const newMovie = {
+        id: movie.id,
+        title: movie.title,
+        poster: movie.poster_path,
+        rating: movie.vote_average?.toFixed(1),
+        year: movie.release_date?.split("-")[0],
+      };
+
+      // Ngayon, hindi na ito mag-e-error dahil 'currentMovies' ay laging array
+      if (!currentMovies.some((m) => m.id === movie.id)) {
+        const updatedMovies = [...currentMovies, newMovie];
+        saveData({ favMovies: updatedMovies });
+        setIsModalOpen(false);
+        setSearchTerm(""); // Linisin na rin ang search
+        setSearchResults([]);
+      }
+    }
+  };
+
   return (
     <div className="p-4 md:p-10 max-w-6xl mx-auto space-y-10">
       {/* HEADER SECTION */}
       <div className="bg-[#0f172a] rounded-[2rem] p-6 md:p-10 border border-white/10 relative overflow-hidden flex items-center min-h-[250px] shadow-2xl">
-        {/* EDIT COVER BUTTON (Top Right) */}
+        {/* EDIT COVER BUTTON */}
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setModalType("cover");
+            setIsModalOpen(true);
+          }}
           className="absolute top-5 right-5 z-30 p-3 bg-black/50 hover:bg-blue-600 backdrop-blur-md rounded-full border border-white/20 transition-all group"
-          title="Change Cover"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -98,27 +217,30 @@ const Profile = ({ user }) => {
           </svg>
         </button>
 
-        {/* BACKGROUND IMAGE & GRADIENT */}
+        {/* BACKGROUND IMAGE & GRADIENT (The Fade Transition) */}
         {profileData.favoriteMovieCover && (
           <div className="absolute inset-0 z-0">
             <img
               src={`https://image.tmdb.org/t/p/original${profileData.favoriteMovieCover}`}
-              className="absolute right-0 top-0 h-full w-full md:w-[70%] object-cover opacity-50"
+              className="absolute right-0 top-0 h-full w-full md:w-[80%] object-cover opacity-40 transition-opacity duration-700"
               alt=""
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#0f172a] via-[#0f172a]/90 to-transparent"></div>
+            {/* Ito yung nagpapakinis ng transition (Left to Right fade) */}
+            <div className="absolute inset-0 bg-gradient-to-r from-[#0f172a] via-[#0f172a]/80 to-transparent"></div>
+            {/* Optional: Dagdag na fade sa ilalim para blend sa card body */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent"></div>
           </div>
         )}
 
         {/* PROFILE INFO */}
-        <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
+        <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 text-center md:text-left w-full">
           <img
             src={user?.photoURL}
-            className="w-24 h-24 md:w-40 md:h-40 rounded-full border-4 border-blue-500 shadow-2xl object-cover"
+            className="w-24 h-24 md:w-40 md:h-40 rounded-full border-4 border-blue-500 shadow-2xl object-cover shrink-0"
             alt=""
           />
-          <div className="min-w-0">
-            <h1 className="text-3xl md:text-5xl font-black text-white">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter">
               {user?.displayName}
             </h1>
 
@@ -171,45 +293,407 @@ const Profile = ({ user }) => {
         </div>
       </div>
 
-      {/* SEARCH MODAL (Same as before but with better z-index) */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-10">
-          <div
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            onClick={() => setIsModalOpen(false)}
-          ></div>
-          <div className="bg-gray-900 border border-white/10 w-full max-w-xl rounded-[2rem] p-6 relative z-10 max-h-[80vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">Set Header Movie</h2>
-            <input
-              type="text"
-              autoFocus
-              placeholder="Search movie cover..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 mb-4"
-              value={searchTerm}
-              onChange={handleSearchCover}
-            />
-            <div className="space-y-2">
-              {searchResults.map((movie) => (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-10">
+        {/* FAVORITE GENRES SECTION */}
+        <div className="bg-[#0f172a] rounded-[2rem] p-8 border border-white/10 shadow-xl flex flex-col">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+              <span className="bg-blue-500/20 p-2 rounded-xl text-blue-500 text-base">
+                🎭
+              </span>
+              Favorite Genres
+            </h3>
+            {(profileData.favGenres || []).length < 3 && (
+              <button
+                onClick={() => {
+                  setModalType("genre");
+                  setIsModalOpen(true);
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-lg shadow-blue-600/20"
+              >
+                + Add
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 flex-1">
+            {profileData.favGenres?.map((genre, index) => (
+              <div
+                key={index}
+                className="group relative bg-gradient-to-r from-white/5 to-transparent border border-white/5 p-5 rounded-2xl flex justify-between items-center hover:border-blue-500/50 hover:from-blue-500/10 transition-all duration-300"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-1 h-8 bg-blue-500 rounded-full group-hover:h-10 transition-all"></div>
+                  <span className="text-xl font-bold text-gray-200 tracking-tight">
+                    {genre}
+                  </span>
+                </div>
                 <button
-                  key={movie.id}
-                  onClick={() => selectCover(movie)}
-                  className="w-full flex items-center gap-4 p-2 hover:bg-white/5 rounded-xl transition-colors text-left group"
+                  onClick={() => removeGenre(genre)}
+                  className="opacity-0 group-hover:opacity-100 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white p-2 rounded-lg transition-all duration-200"
                 >
-                  <img
-                    src={`https://image.tmdb.org/t/p/w92${movie.poster_path}`}
-                    className="w-12 h-16 object-cover rounded-lg"
-                    alt=""
-                  />
-                  <div>
-                    <p className="font-bold group-hover:text-blue-400">
-                      {movie.title}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {movie.release_date?.split("-")[0]}
-                    </p>
-                  </div>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={3}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
                 </button>
-              ))}
+              </div>
+            ))}
+            {profileData.favGenres?.length === 0 && (
+              <div className="border-2 border-dashed border-white/5 rounded-3xl p-10 text-center text-gray-600 font-bold uppercase tracking-widest text-xs">
+                Empty Genre List
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* FAVORITE ACTORS SECTION */}
+        <div className="bg-[#0f172a] rounded-[2rem] p-8 border border-white/10 shadow-xl">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <span className="text-yellow-500">🎬</span> Favorite Actors
+            </h3>
+            {(profileData.favActors || []).length < 3 && (
+              <button
+                onClick={() => {
+                  setModalType("actor");
+                  setIsModalOpen(true);
+                }}
+                className="flex items-center gap-2 text-xs bg-yellow-600/20 text-yellow-400 px-4 py-2 rounded-full border border-yellow-600/30 hover:bg-yellow-600 hover:text-white transition-all font-bold"
+              >
+                <span>+</span> Add Actor
+              </button>
+            )}
+          </div>
+
+          {/* MOVIE CARD STYLE GRID */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {profileData.favActors?.map((actor, index) => (
+              <div
+                key={index}
+                className="bg-[#1a2235] border border-white/5 rounded-[2rem] p-3 transition-all hover:scale-105 group relative"
+              >
+                {/* Card Image Container */}
+                <div className="relative aspect-[3/4] overflow-hidden rounded-[1.5rem] mb-4">
+                  <img
+                    src={
+                      actor.image ||
+                      "https://via.placeholder.com/185x278?text=No+Image"
+                    }
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    alt={actor.name}
+                  />
+                  {/* Floating Remove Button */}
+                  <button
+                    onClick={() => {
+                      const newActors = profileData.favActors.filter(
+                        (a) => a.id !== actor.id,
+                      );
+                      saveData({ favActors: newActors });
+                    }}
+                    className="absolute top-3 right-3 bg-black/60 hover:bg-red-600 text-white p-2 rounded-xl backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all z-20"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Card Info (Gaya ng sa Movie Card screenshot) */}
+                <div className="px-2 pb-2">
+                  <h4 className="text-white font-bold text-sm md:text-base truncate mb-1">
+                    {actor.name}
+                  </h4>
+                  <div className="flex justify-between items-center mt-2">
+                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+                      Actor
+                    </span>
+                    <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center">
+                      <span className="text-yellow-500 text-[10px]">★</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Placeholder Boxes kung wala pang 3 actors */}
+            {Array.from({
+              length: 3 - (profileData.favActors?.length || 0),
+            }).map((_, i) => (
+              <div
+                key={`empty-${i}`}
+                className="border-2 border-dashed border-white/5 rounded-[2rem] aspect-[3/4] flex items-center justify-center text-gray-700 font-black text-4xl"
+              >
+                ?
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* TOP 5 FAVORITE MOVIES SECTION */}
+      <div className="bg-[#0f172a] rounded-[2rem] p-8 border border-white/10 shadow-xl mt-8">
+        <div className="flex justify-between items-center mb-8">
+          <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+            <span className="bg-red-500/20 p-2 rounded-xl text-red-500 text-base">
+              🔥
+            </span>
+            Top 5 Favorites
+          </h3>
+          {(profileData.favMovies || []).length < 5 && (
+            <button
+              onClick={() => {
+                setModalType("movie");
+                setIsModalOpen(true);
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:scale-105"
+            >
+              + Add Movie
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {profileData.favMovies?.map((movie) => (
+            <div
+              key={movie.id}
+              className="bg-[#1a2235] border border-white/5 rounded-[2rem] p-3 group relative transition-all hover:translate-y-[-5px]"
+            >
+              {/* Movie Poster */}
+              <div className="relative aspect-[2/3] overflow-hidden rounded-[1.5rem] mb-4">
+                <img
+                  src={`https://image.tmdb.org/t/p/w342${movie.poster}`}
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  alt={movie.title}
+                />
+                {/* Rating Badge gaya ng screenshot */}
+                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg flex items-center gap-1 border border-white/10">
+                  <span className="text-yellow-500 text-[10px]">★</span>
+                  <span className="text-white text-[10px] font-bold">
+                    {movie.rating}
+                  </span>
+                </div>
+                {/* Remove Button */}
+                <button
+                  onClick={() =>
+                    saveData({
+                      favMovies: profileData.favMovies.filter(
+                        (m) => m.id !== movie.id,
+                      ),
+                    })
+                  }
+                  className="absolute top-3 right-3 bg-red-600 text-white p-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-lg"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={3}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+              {/* Movie Info */}
+              <div className="px-1">
+                <h4 className="text-white font-bold text-sm truncate">
+                  {movie.title}
+                </h4>
+                <p className="text-gray-500 text-[10px] mt-1 font-bold">
+                  {movie.year}
+                </p>
+              </div>
+            </div>
+          ))}
+
+          {/* Placeholder kung kulang pa sa 5 */}
+          {Array.from({ length: 5 - (profileData.favMovies?.length || 0) }).map(
+            (_, i) => (
+              <div
+                key={i}
+                className="border-2 border-dashed border-white/5 rounded-[2rem] aspect-[2/3] flex items-center justify-center text-gray-800 text-3xl font-black"
+              >
+                ?
+              </div>
+            ),
+          )}
+        </div>
+      </div>
+
+      {/* DYNAMIC MODAL */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/90 backdrop-blur-md"
+            onClick={() => {
+              setIsModalOpen(false);
+              setSearchResults([]); // Linisin ang results pag sinara
+              setSearchTerm(""); // Linisin ang text pag sinara
+            }}
+          ></div>
+
+          <div className="bg-gray-900 border border-white/10 w-full max-w-md rounded-[2.5rem] p-8 relative z-10 max-h-[80vh] flex flex-col">
+            <h2 className="text-2xl font-black mb-6 text-white uppercase tracking-tighter">
+              {modalType === "cover"
+                ? "Set Header Movie"
+                : modalType === "genre"
+                  ? "Select Genre"
+                  : modalType === "movie" // Idagdag ito
+                    ? "Add Favorite Movie"
+                    : "Search Actor"}
+            </h2>
+
+            {/* 1. SEARCH INPUT (Para sa Cover at Actor lang) */}
+            {modalType !== "genre" && (
+              <input
+                type="text"
+                autoFocus
+                placeholder={
+                  modalType === "cover"
+                    ? "Search for a movie cover..."
+                    : modalType === "movie"
+                      ? "Search for a movie title..."
+                      : "Type actor name..."
+                }
+                className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 mb-4 text-white focus:outline-none focus:border-blue-500 transition-all"
+                value={searchTerm}
+                onChange={
+                  modalType === "cover" || modalType === "movie" // Pagsamahin sila rito
+                    ? handleSearchCover
+                    : (e) => searchPeople(e.target.value)
+                }
+              />
+            )}
+
+            <div className="overflow-y-auto flex-1 pr-2 custom-scrollbar">
+              {/* 2. COVER RESULTS */}
+              {modalType === "cover" && (
+                <div className="space-y-2">
+                  {searchResults.map((movie) => (
+                    <button
+                      key={movie.id}
+                      onClick={() => selectCover(movie)}
+                      className="w-full flex items-center gap-4 p-2 hover:bg-white/5 rounded-xl transition-all text-left group"
+                    >
+                      <img
+                        src={`https://image.tmdb.org/t/p/w92${movie.poster_path}`}
+                        className="w-12 h-16 object-cover rounded-lg"
+                      />
+                      <div>
+                        <p className="font-bold text-white group-hover:text-blue-400">
+                          {movie.title}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {movie.release_date?.split("-")[0]}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* 3. GENRE LIST */}
+              {modalType === "genre" && (
+                <div className="grid grid-cols-2 gap-2">
+                  {staticGenres.map((g) => (
+                    <button
+                      key={g}
+                      disabled={profileData.favGenres?.includes(g)}
+                      onClick={() => {
+                        handleAddGenre(g);
+                        setIsModalOpen(false);
+                      }}
+                      className={`p-3 rounded-xl text-sm font-bold transition-all ${profileData.favGenres?.includes(g) ? "bg-gray-800 text-gray-600 cursor-not-allowed" : "bg-white/5 text-gray-300 hover:bg-blue-600 hover:text-white"}`}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* 4. ACTOR RESULTS */}
+              {modalType === "actor" && (
+                <div className="space-y-2">
+                  {searchResults.map((person) => (
+                    <button
+                      key={person.id}
+                      onClick={() => addActor(person)}
+                      className="w-full flex items-center gap-4 p-2 hover:bg-white/5 rounded-2xl transition-all text-left group"
+                    >
+                      <img
+                        src={
+                          person.profile_path
+                            ? `https://image.tmdb.org/t/p/w45${person.profile_path}`
+                            : "https://via.placeholder.com/45"
+                        }
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                      <span className="text-white font-bold group-hover:text-yellow-500">
+                        {person.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* 5. MOVIE RESULTS (Yung idinagdag natin) */}
+              {modalType === "movie" && (
+                <div className="space-y-2">
+                  {searchResults.map((movie) => (
+                    <button
+                      key={movie.id}
+                      onClick={() => addMovie(movie)} // Tatawagin nito yung function na ginawa natin kanina
+                      className="w-full flex items-center gap-4 p-2 hover:bg-white/5 rounded-2xl transition-all text-left group"
+                    >
+                      <img
+                        src={`https://image.tmdb.org/t/p/w92${movie.poster_path}`}
+                        className="w-12 h-16 object-cover rounded-lg shadow-lg"
+                        alt=""
+                      />
+                      <div>
+                        <p className="font-bold text-white group-hover:text-red-500 transition-colors">
+                          {movie.title}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {movie.release_date?.split("-")[0]}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                  {searchResults.length === 0 && searchTerm.length > 2 && (
+                    <p className="text-gray-500 text-center py-4 text-sm italic">
+                      No movies found...
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
