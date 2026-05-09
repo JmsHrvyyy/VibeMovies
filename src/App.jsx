@@ -7,6 +7,7 @@ import MovieCard from "./components/MovieCard";
 import Sidebar from "./components/Sidebar";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Profile from "./pages/Profile";
+import Watchlist from "./pages/Watchlist";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -88,6 +89,9 @@ function App() {
                 }
               />
               <Route path="/profile" element={<Profile user={user} />} />
+
+              <Route path="/watchlist" element={<Watchlist user={user} />} />
+              
             </Routes>
           </main>
         </div>
