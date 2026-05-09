@@ -21,15 +21,15 @@ const Sidebar = ({ isOpen, setIsOpen, user }) => {
 
       {/* 2. SIDEBAR CONTAINER */}
       <aside
-        className={`bg-gray-900 border-r border-gray-800 flex flex-col z-[70] transition-all duration-300 ease-in-out
-        /* Mobile: Fixed overlay + Overflow Hidden para hindi lumabas ang content */
-        fixed inset-y-0 left-0 overflow-hidden
-        ${isOpen ? "w-64 translate-x-0" : "w-0 -translate-x-full lg:translate-x-0"}
+        className={`bg-gray-900 border-r border-gray-800 flex flex-col z-[70] transition-transform duration-300 ease-in-out
+        /* Mobile: Fixed overlay */
+        fixed inset-y-0 left-0 w-64
+        ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         /* Desktop: Persistent & Sticky */
-        lg:static lg:w-64 lg:h-[calc(100vh-73px)] lg:sticky lg:top-[73px] lg:translate-x-0`}
+        lg:static lg:h-[calc(100vh-73px)] lg:sticky lg:top-[73px]`}
       >
         {/* 3. CONTENT WRAPPER - Dito natin ilalagay ang fixed width */}
-        <div className="w-64 flex flex-col h-full p-4 shrink-0 overflow-y-auto">
+        <div className="w-full flex flex-col h-full p-4 overflow-y-auto">
           <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-6 px-4">
             Menu
           </p>
