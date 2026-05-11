@@ -53,6 +53,8 @@ const WatchlistPage = ({ user }) => {
       id: movie.id,
       title: movie.title,
       poster: movie.poster_path,
+      backdrop_path: movie.backdrop_path, // KELANGAN ITO PARA SA HERO BACKGROUND
+      overview: movie.overview, // KELANGAN ITO PARA SA HERO DESCRIPTION
       rating: movie.vote_average?.toFixed(1) || "0.0",
       year: movie.release_date?.split("-")[0] || "N/A",
     };
