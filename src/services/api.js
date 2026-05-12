@@ -47,3 +47,10 @@ export const getNowPlaying = async () => {
   const data = await response.json();
   return data.results;
 };
+
+export const getMovieDetails = async (movieId) => {
+  const response = await fetch(
+    `${BASE_URL}/movie/${movieId}?api_key=${API_KEY}&append_to_response=credits,videos`
+  );
+  return await response.json();
+};
