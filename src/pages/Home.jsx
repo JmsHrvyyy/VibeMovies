@@ -137,26 +137,33 @@ const Home = ({ user, searchResults, searchLoading }) => {
 
   // Function para i-save ang movie sa isang existing watchlist
   const handleSaveToPlaylist = async (listId, existingMovies = []) => {
-    if (!featuredMovie || !user) return;
+    // 1. I-check kung existing na yung movie ID sa array
+    const isAlreadyAdded = existingMovies.some(
+      (movie) => movie.id === details.id,
+    );
 
+    if (isAlreadyAdded) {
+      // 2. Kapag nahanap, mag-show ng message at 'wag nang ituloy ang save
+      alert("This movie is already in this playlist! 🎥");
+      return; // Stop the function here
+    }
+
+    // 3. Kung wala pa, proceed sa pag-save
     const movieData = {
-      id: featuredMovie.id,
-      title: featuredMovie.title,
-      poster: featuredMovie.poster_path || featuredMovie.poster, // Safety check sa property name
-      backdrop_path: featuredMovie.backdrop_path,
-      overview: featuredMovie.overview,
+      id: details.id,
+      title: details.title,
+      poster: details.poster_path,
       addedAt: new Date().toISOString(),
     };
 
     try {
-      // Gamitin ang listId para mahanap ang tamang folder
       const listRef = doc(db, "users", user.uid, "watchlists", listId);
       await updateDoc(listRef, {
         movies: [...existingMovies, movieData],
       });
 
       setIsModalOpen(false);
-      alert(`Added to playlist!`);
+      alert("Successfully added to playlist! ✅");
     } catch (error) {
       console.error("Error adding movie:", error);
     }

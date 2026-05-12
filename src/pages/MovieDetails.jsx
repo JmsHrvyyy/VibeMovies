@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getMovieDetails } from "../services/api";
+import { getMovieDetails, getRecommendations } from "../services/api";
 import { db } from "../firebase";
 import {
   collection,
@@ -11,6 +11,7 @@ import {
   updateDoc,
   addDoc,
 } from "firebase/firestore";
+import MovieCard from "../components/MovieCard";
 
 const MovieDetails = ({ user }) => {
   const { id } = useParams();
@@ -23,13 +24,19 @@ const MovieDetails = ({ user }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newListName, setNewListName] = useState("");
 
+  const [similarMovies, setSimilarMovies] = useState([]);
+
   useEffect(() => {
     const fetchDetails = async () => {
       try {
         const data = await getMovieDetails(id);
         setDetails(data);
+
+        // Kunin din natin ang similar movies (Siguraduhin na may 'getSimilarMovies' sa api.js mo)
+        const similarData = await getRecommendations(id); // Pwedeng recommendations or similar
+        setSimilarMovies(similarData);
       } catch (error) {
-        console.error("Failed to fetch movie details:", error);
+        console.error("Failed to fetch details:", error);
       }
     };
     fetchDetails();
@@ -49,16 +56,36 @@ const MovieDetails = ({ user }) => {
   }, [user]);
 
   const handleSaveToPlaylist = async (listId, existingMovies = []) => {
+    // 1. I-check kung existing na yung movie ID sa array
+    const isAlreadyAdded = existingMovies.some(
+      (movie) => movie.id === details.id,
+    );
+
+    if (isAlreadyAdded) {
+      // 2. Kapag nahanap, mag-show ng message at 'wag nang ituloy ang save
+      alert("This movie is already in this playlist! 🎥");
+      return; // Stop the function here
+    }
+
+    // 3. Kung wala pa, proceed sa pag-save
     const movieData = {
       id: details.id,
       title: details.title,
       poster: details.poster_path,
       addedAt: new Date().toISOString(),
     };
-    const listRef = doc(db, "users", user.uid, "watchlists", listId);
-    await updateDoc(listRef, { movies: [...existingMovies, movieData] });
-    setIsModalOpen(false);
-    alert("Saved to playlist!");
+
+    try {
+      const listRef = doc(db, "users", user.uid, "watchlists", listId);
+      await updateDoc(listRef, {
+        movies: [...existingMovies, movieData],
+      });
+
+      setIsModalOpen(false);
+      alert("Successfully added to playlist! ✅");
+    } catch (error) {
+      console.error("Error adding movie:", error);
+    }
   };
 
   const handleCreateAndSave = async () => {
@@ -215,6 +242,59 @@ const MovieDetails = ({ user }) => {
             </div>
           </div>
         </div>
+        {/* MovieDetails.jsx - Similar Movies Section */}
+        <section className="mt-32 px-8 max-w-7xl mx-auto">
+          {/* Sticky Header with Backdrop Blur */}
+          <div className="sticky top-0 z-30 py-6 bg-[#080d17]/60 backdrop-blur-md border-b border-white/5 mb-10 -mx-8 px-8">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <h3 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em]">
+                  Discovery
+                </h3>
+                <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">
+                  More Like This
+                </h2>
+              </div>
+
+              {/* Visual Indicator */}
+              <div className="hidden md:flex items-center gap-2 text-gray-500">
+                <span className="text-[10px] font-black uppercase tracking-widest">
+                  Swipe to explore
+                </span>
+                <div className="w-12 h-[2px] bg-blue-600/30">
+                  <div className="w-1/2 h-full bg-blue-600 animate-pulse"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Horizontal Scroll Row */}
+          <div className="flex overflow-x-auto gap-8 pb-12 no-scrollbar scroll-smooth snap-x">
+            {similarMovies.length > 0 ? (
+              similarMovies.map((movie) => (
+                <div
+                  key={movie.id}
+                  className="min-w-[220px] md:min-w-[280px] snap-start"
+                >
+                  <MovieCard
+                    movie={movie}
+                    onAddToWatchlist={(selected) => {
+                      // Gagamitin natin yung modal state na nasa MovieDetails na
+                      setDetails(selected);
+                      setIsModalOpen(true);
+                    }}
+                  />
+                </div>
+              ))
+            ) : (
+              <div className="w-full py-20 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-[3rem]">
+                <p className="text-gray-500 italic font-bold uppercase text-xs tracking-widest animate-pulse">
+                  Curating similar vibes...
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
       </div>
 
       {/* PLAYLIST MODAL */}
