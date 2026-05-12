@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "../firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { searchMovies } from "../services/api";
+import MovieCard from "../components/MovieCard";
 
 const Profile = ({ user }) => {
   const [loading, setLoading] = useState(true);
@@ -474,75 +475,59 @@ const Profile = ({ user }) => {
           )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {profileData.favMovies?.map((movie) => (
-            <div
-              key={movie.id}
-              className="bg-[#1a2235] border border-white/5 rounded-[2rem] p-3 group relative transition-all hover:translate-y-[-5px]"
-            >
-              {/* Movie Poster */}
-              <div className="relative aspect-[2/3] overflow-hidden rounded-[1.5rem] mb-4">
-                <img
-                  src={`https://image.tmdb.org/t/p/w342${movie.poster}`}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                  alt={movie.title}
-                />
-                {/* Rating Badge gaya ng screenshot */}
-                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg flex items-center gap-1 border border-white/10">
-                  <span className="text-yellow-500 text-[10px]">★</span>
-                  <span className="text-white text-[10px] font-bold">
-                    {movie.rating}
-                  </span>
-                </div>
-                {/* Remove Button */}
-                <button
-                  onClick={() =>
-                    saveData({
-                      favMovies: profileData.favMovies.filter(
-                        (m) => m.id !== movie.id,
-                      ),
-                    })
-                  }
-                  className="absolute top-3 right-3 bg-red-600 text-white p-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all shadow-lg"
+        {/* Profile.jsx - Favorite Movies Section */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+          {/* 1. Nilagyan natin ng slice(0, 5) para hanggang lima lang ang lumabas */}
+          {profileData.favMovies?.slice(0, 5).map((movie) => (
+            <div key={movie.id} className="relative group">
+              <MovieCard
+                movie={{
+                  ...movie,
+                  poster_path: movie.poster_path || movie.poster,
+                }}
+              />
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeMovie(movie.id);
+                }}
+                className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 p-2 bg-black/60 hover:bg-red-600 text-white rounded-xl backdrop-blur-md transition-all"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-3 w-3"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={3}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </div>
-              {/* Movie Info */}
-              <div className="px-1">
-                <h4 className="text-white font-bold text-sm truncate">
-                  {movie.title}
-                </h4>
-                <p className="text-gray-500 text-[10px] mt-1 font-bold">
-                  {movie.year}
-                </p>
-              </div>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={3}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
             </div>
           ))}
 
-          {/* Placeholder kung kulang pa sa 5 */}
-          {Array.from({ length: 5 - (profileData.favMovies?.length || 0) }).map(
-            (_, i) => (
-              <div
-                key={i}
-                className="border-2 border-dashed border-white/5 rounded-[2rem] aspect-[2/3] flex items-center justify-center text-gray-800 text-3xl font-black"
-              >
-                ?
+          {/* 2. Lalabas lang ang 'Add' button kung wala pang 5 movies */}
+          {profileData.favMovies?.length < 5 && (
+            <button
+              onClick={() => {
+                setModalType("movie");
+                setIsModalOpen(true);
+              }}
+              className="aspect-[2/3] border-2 border-dashed border-white/10 rounded-[2rem] flex flex-col items-center justify-center gap-3 hover:bg-white/5 hover:border-blue-500/50 transition-all group"
+            >
+              <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                <span className="text-2xl text-gray-500">+</span>
               </div>
-            ),
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 text-center px-4">
+                Add Favorite
+              </span>
+            </button>
           )}
         </div>
       </div>

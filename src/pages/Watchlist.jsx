@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import {
   collection,
@@ -11,6 +12,7 @@ import {
   deleteDoc, // Dagdag import
 } from "firebase/firestore";
 import { searchMovies } from "../services/api";
+import MovieCard from "../components/MovieCard";
 
 const WatchlistPage = ({ user }) => {
   const [watchlists, setWatchlists] = useState([]);
@@ -253,16 +255,26 @@ const WatchlistPage = ({ user }) => {
             </button>
           </div>
 
+          {/* Content: Movies in Selected List */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
             {selectedList.movies?.map((movie) => (
-              <div
-                key={movie.id}
-                className="bg-[#1a2235] border border-white/5 rounded-[2rem] p-3 group relative overflow-hidden"
-              >
-                {/* REMOVE MOVIE BUTTON */}
+              <div key={movie.id} className="relative group">
+                {/* 1. GAMITIN ANG MOVIECARD COMPONENT PARA SA NAVIGATION */}
+                {/* Nilagyan ko ng transition para smooth ang paglabas ng delete button */}
+                <MovieCard
+                  movie={{
+                    ...movie,
+                    poster_path: movie.poster, // I-map natin yung 'poster' field mo sa 'poster_path' na gamit ng MovieCard
+                  }}
+                />
+
+                {/* 2. REMOVE MOVIE BUTTON (Mananatili ang logic at style mo) */}
                 <button
-                  onClick={() => removeMovieFromList(movie.id)}
-                  className="absolute top-5 right-5 z-20 opacity-0 group-hover:opacity-100 p-2 bg-black/60 hover:bg-red-600 text-white rounded-xl backdrop-blur-md transition-all"
+                  onClick={(e) => {
+                    e.stopPropagation(); // Importante: para hindi mag-trigger ang navigation pag nag-delete
+                    removeMovieFromList(movie.id);
+                  }}
+                  className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 p-2 bg-black/60 hover:bg-red-600 text-white rounded-xl backdrop-blur-md transition-all"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -279,22 +291,10 @@ const WatchlistPage = ({ user }) => {
                     />
                   </svg>
                 </button>
-
-                <img
-                  src={`https://image.tmdb.org/t/p/w500${movie.poster}`}
-                  className="w-full aspect-[2/3] object-cover rounded-[1.5rem] group-hover:scale-105 transition-transform duration-500"
-                  alt={movie.title}
-                />
-                <div className="p-3">
-                  <h4 className="text-white font-bold truncate text-sm">
-                    {movie.title}
-                  </h4>
-                  <p className="text-gray-500 text-[10px] font-bold uppercase">
-                    {movie.year}
-                  </p>
-                </div>
               </div>
             ))}
+
+            {/* EMPTY STATE (Original UI mo) */}
             {(!selectedList.movies || selectedList.movies.length === 0) && (
               <div className="col-span-full py-20 text-center border-2 border-dashed border-white/5 rounded-[3rem]">
                 <p className="text-gray-600 font-bold uppercase tracking-widest text-sm">
