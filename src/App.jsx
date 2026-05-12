@@ -8,7 +8,8 @@ import Sidebar from "./components/Sidebar";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Profile from "./pages/Profile";
 import Watchlist from "./pages/Watchlist";
-import Home from "./pages/Home"; // Siguraduhing naka-import ito
+import Home from "./pages/Home";
+import MovieDetails from "./pages/MovieDetails";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -63,6 +64,7 @@ function App() {
                   />
                 }
               />
+              <Route path="/movie/:id" element={<MovieDetails user={user} />} />
               <Route path="/profile" element={<Profile user={user} />} />
               <Route path="/watchlist" element={<Watchlist user={user} />} />
             </Routes>
