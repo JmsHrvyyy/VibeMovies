@@ -10,6 +10,7 @@ import Profile from "./pages/Profile";
 import Watchlist from "./pages/Watchlist";
 import Home from "./pages/Home";
 import MovieDetails from "./pages/MovieDetails";
+import ArtistDetails from "./pages/ArtistDetails";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -65,6 +66,7 @@ function App() {
                 }
               />
               <Route path="/movie/:id" element={<MovieDetails user={user} />} />
+              <Route path="/artist/:id" element={<ArtistDetails />} />
               <Route path="/profile" element={<Profile user={user} />} />
               <Route path="/watchlist" element={<Watchlist user={user} />} />
             </Routes>

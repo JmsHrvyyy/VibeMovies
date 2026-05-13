@@ -54,3 +54,10 @@ export const getMovieDetails = async (movieId) => {
   );
   return await response.json();
 };
+
+export const getArtistDetails = async (id) => {
+  const response = await fetch(
+    `${BASE_URL}/person/${id}?api_key=${API_KEY}&append_to_response=combined_credits`
+  );
+  return await response.json();
+};
