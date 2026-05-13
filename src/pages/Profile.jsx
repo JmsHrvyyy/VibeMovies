@@ -3,6 +3,7 @@ import { db } from "../firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { searchMovies } from "../services/api";
 import MovieCard from "../components/MovieCard";
+import ArtistCard from "../components/ArtistCard";
 
 const Profile = ({ user }) => {
   const [loading, setLoading] = useState(true);
@@ -157,6 +158,28 @@ const Profile = ({ user }) => {
       };
       saveData({ favActors: [...profileData.favActors, newActor] });
       setIsModalOpen(false);
+    }
+  };
+
+  const removeActor = async (actorId) => {
+    try {
+      const updatedActors = profileData.favActors.filter(
+        (a) => a.id !== actorId,
+      );
+
+      // Update local state
+      setProfileData((prev) => ({
+        ...prev,
+        favActors: updatedActors,
+      }));
+
+      // Update Firebase
+      if (user?.uid) {
+        const docRef = doc(db, "users", user.uid);
+        await setDoc(docRef, { favActors: updatedActors }, { merge: true });
+      }
+    } catch (error) {
+      console.error("Error removing actor:", error);
     }
   };
 
@@ -359,96 +382,71 @@ const Profile = ({ user }) => {
         </div>
 
         {/* FAVORITE ACTORS SECTION */}
-        <div className="bg-[#0f172a] rounded-[2rem] p-8 border border-white/10 shadow-xl">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-              <span className="text-yellow-500">🎬</span> Favorite Actors
-            </h3>
-            {(profileData.favActors || []).length < 3 && (
+        <div className="bg-[#1a2235] border border-white/5 rounded-[3rem] p-6 md:p-8">
+          <div className="flex justify-between items-center mb-8 px-4">
+            <div className="flex items-center gap-4">
+              <div className="w-2.5 h-10 bg-red-600 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.6)]" />
+              <h3 className="text-2xl font-black uppercase italic tracking-tighter">
+                Top 3 Favorite Actors
+              </h3>
+            </div>
+            <span className="text-[11px] font-black text-gray-500 uppercase tracking-[0.4em]">
+              {profileData.favActors?.length || 0} / 3
+            </span>
+          </div>
+
+          {/* Grid: Maliit na gap (gap-4) para mas lumaki ang mismong cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5 w-full">
+            {profileData.favActors?.slice(0, 3).map((actor) => (
+              <div key={actor.id} className="relative group w-full h-full">
+                {/* ArtistCard - Kakainin nito ang buong width ng grid column */}
+                <ArtistCard artist={actor} />
+
+                {/* Remove Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeActor(actor.id);
+                  }}
+                  className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 p-3 bg-black/60 hover:bg-red-600 text-white rounded-2xl backdrop-blur-md transition-all shadow-2xl"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={3}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+            ))}
+
+            {/* Placeholder Slot - Sinlaki rin ng mga cards */}
+            {profileData.favActors?.length < 3 && (
               <button
                 onClick={() => {
                   setModalType("actor");
                   setIsModalOpen(true);
                 }}
-                className="flex items-center gap-2 text-xs bg-yellow-600/20 text-yellow-400 px-4 py-2 rounded-full border border-yellow-600/30 hover:bg-yellow-600 hover:text-white transition-all font-bold"
+                className="w-full aspect-[2/3] border-2 border-dashed border-white/5 rounded-[2.5rem] flex flex-col items-center justify-center gap-6 hover:bg-white/5 hover:border-red-500/50 transition-all group"
               >
-                <span>+</span> Add Actor
+                <div className="w-20 h-20 bg-white/5 rounded-[2.5rem] flex items-center justify-center group-hover:scale-110 transition-transform group-hover:bg-red-500/10">
+                  <span className="text-4xl text-gray-600 group-hover:text-red-500">
+                    +
+                  </span>
+                </div>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 group-hover:text-white">
+                  Add Slot {profileData.favActors?.length + 1}
+                </p>
               </button>
             )}
-          </div>
-
-          {/* MOVIE CARD STYLE GRID */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {profileData.favActors?.map((actor, index) => (
-              <div
-                key={index}
-                className="bg-[#1a2235] border border-white/5 rounded-[2rem] p-3 transition-all hover:scale-105 group relative"
-              >
-                {/* Card Image Container */}
-                <div className="relative aspect-[3/4] overflow-hidden rounded-[1.5rem] mb-4">
-                  <img
-                    src={
-                      actor.image ||
-                      "https://via.placeholder.com/185x278?text=No+Image"
-                    }
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    alt={actor.name}
-                  />
-                  {/* Floating Remove Button */}
-                  <button
-                    onClick={() => {
-                      const newActors = profileData.favActors.filter(
-                        (a) => a.id !== actor.id,
-                      );
-                      saveData({ favActors: newActors });
-                    }}
-                    className="absolute top-3 right-3 bg-black/60 hover:bg-red-600 text-white p-2 rounded-xl backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all z-20"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* Card Info (Gaya ng sa Movie Card screenshot) */}
-                <div className="px-2 pb-2">
-                  <h4 className="text-white font-bold text-sm md:text-base truncate mb-1">
-                    {actor.name}
-                  </h4>
-                  <div className="flex justify-between items-center mt-2">
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                      Actor
-                    </span>
-                    <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center">
-                      <span className="text-yellow-500 text-[10px]">★</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {/* Placeholder Boxes kung wala pang 3 actors */}
-            {Array.from({
-              length: 3 - (profileData.favActors?.length || 0),
-            }).map((_, i) => (
-              <div
-                key={`empty-${i}`}
-                className="border-2 border-dashed border-white/5 rounded-[2rem] aspect-[3/4] flex items-center justify-center text-gray-700 font-black text-4xl"
-              >
-                ?
-              </div>
-            ))}
           </div>
         </div>
       </div>

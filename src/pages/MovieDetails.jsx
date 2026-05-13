@@ -12,6 +12,7 @@ import {
   addDoc,
 } from "firebase/firestore";
 import MovieCard from "../components/MovieCard";
+import ArtistCard from "../components/ArtistCard";
 
 const MovieDetails = ({ user }) => {
   const { id } = useParams();
@@ -28,18 +29,29 @@ const MovieDetails = ({ user }) => {
 
   useEffect(() => {
     const fetchDetails = async () => {
+      // I-reset pareho para fresh start paglipat ng movie
+      setDetails(null);
+      setSimilarMovies([]);
+
       try {
         const data = await getMovieDetails(id);
-        setDetails(data);
+        if (data) {
+          setDetails(data);
 
-        // Kunin din natin ang similar movies (Siguraduhin na may 'getSimilarMovies' sa api.js mo)
-        const similarData = await getRecommendations(id); // Pwedeng recommendations or similar
-        setSimilarMovies(similarData);
+          // Tawagin ang recommendations pagkatapos makuha ang main details
+          const similarData = await getRecommendations(id);
+
+          // I-filter lang yung mga movies na may poster para hindi pangit ang grid
+          const filteredSimilar = similarData.filter((m) => m.poster_path);
+          setSimilarMovies(filteredSimilar);
+        }
       } catch (error) {
         console.error("Failed to fetch details:", error);
       }
     };
+
     fetchDetails();
+    window.scrollTo(0, 0);
   }, [id]);
 
   useEffect(() => {
@@ -110,191 +122,145 @@ const MovieDetails = ({ user }) => {
     );
 
   return (
-    <div className="min-h-screen bg-[#080d17] text-white pb-20">
-      {/* 1. NAVIGATION BAR */}
-      <div className="p-8 flex items-center justify-between max-w-7xl mx-auto w-full">
+    <div className="min-h-screen bg-[#080d17] text-white p-6 md:p-12">
+      <div className="max-w-7xl mx-auto">
+        {/* BACK BUTTON */}
         <button
           onClick={() => navigate(-1)}
-          className="group bg-white/5 border border-white/10 px-8 py-4 rounded-2xl hover:bg-white/10 transition-all flex items-center gap-3"
+          className="mb-10 flex items-center gap-2 text-gray-500 hover:text-blue-500 transition-colors font-black text-[10px] uppercase tracking-[0.3em]"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5 text-blue-500 group-hover:-translate-x-2 transition-transform"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={3}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          <span className="text-[10px] font-black uppercase tracking-[0.3em]">
-            Back
-          </span>
+          <span className="text-lg">←</span> Back to Exploration
         </button>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 px-10 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-2xl shadow-blue-600/40"
-        >
-          + Add to Watchlist
-        </button>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-8 mt-4">
-        <div className="grid lg:grid-cols-12 gap-16">
-          {/* LEFT: POSTER & GIANT RATING */}
-          <div className="lg:col-span-4 space-y-8">
-            <div className="relative group">
-              <img
-                src={`https://image.tmdb.org/t/p/w500${details.poster_path}`}
-                className="w-full rounded-[3rem] shadow-2xl border border-white/10 group-hover:scale-[1.02] transition-transform duration-500"
-                alt=""
-              />
-            </div>
-
-            {/* ENHANCED RATING CARD */}
-            <div className="bg-gradient-to-br from-white/10 to-transparent border border-white/10 rounded-[2.5rem] p-6 flex flex-col items-center justify-center text-center">
-              <span className="text-blue-500 font-black text-[9px] uppercase tracking-[0.3em] mb-1">
-                Vibe Score
-              </span>
-              <div className="flex items-end gap-1">
-                {/* Bawasan din natin ng kaunti yung 8xl na rating */}
-                <span className="text-6xl font-black italic tracking-tighter leading-none">
-                  {details.vote_average?.toFixed(1)}
-                </span>
-                <span className="text-blue-500 font-black text-xl mb-1">
-                  /10
-                </span>
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-12 lg:gap-20">
+          {/* LEFT SIDEBAR: STICKY POSTER & QUICK ACTIONS */}
+          <div className="md:col-span-4 lg:col-span-4">
+            <div className="sticky top-12 space-y-6">
+              <div className="bg-[#1a2235] p-4 rounded-[3.5rem] border border-white/5 shadow-2xl">
+                <img
+                  src={`https://image.tmdb.org/t/p/w500${details.poster_path}`}
+                  className="w-full aspect-[2/3] object-cover rounded-[3rem] shadow-2xl"
+                  alt={details.title}
+                />
               </div>
-              <p className="text-gray-500 text-[9px] font-bold uppercase mt-3 tracking-widest">
-                {details.vote_count} Reviews
-              </p>
+
+              {/* Action Button: Add to Watchlist */}
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="w-full py-6 bg-blue-600 hover:bg-blue-500 text-white rounded-[2.5rem] font-black uppercase italic tracking-widest text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.3)] hover:scale-[1.02]"
+              >
+                + Add to Watchlist
+              </button>
+
+              {/* Quick Info - Vertically Stacked & Highlighted */}
+              <div className="flex flex-col gap-4 px-2">
+                {/* RATING HIGHLIGHT (TOP) */}
+                <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-[2.5rem] p-8 flex flex-col items-center justify-center shadow-2xl">
+                  <p className="text-gray-500 font-black text-[10px] uppercase tracking-[0.3em] mb-2">
+                    Rating Score
+                  </p>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-white text-6xl font-black italic tracking-tighter">
+                      {details.vote_average?.toFixed(1)}
+                    </span>
+                    <span className="text-gray-500 font-black text-sm italic">
+                      /10
+                    </span>
+                  </div>
+                </div>
+
+                {/* RUNTIME (BOTTOM) */}
+                <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5 flex flex-col items-center justify-center">
+                  <p className="text-gray-500 font-black text-[9px] uppercase tracking-[0.3em] mb-1">
+                    Duration
+                  </p>
+                  <p className="text-white font-black text-xl italic tracking-tight">
+                    {details.runtime}{" "}
+                    <span className="text-[10px] text-gray-500 font-bold ml-1">
+                      MINS
+                    </span>
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* RIGHT: INFO & CAST */}
-          <div className="lg:col-span-8 space-y-12">
-            <div>
-              <h1 className="text-5xl md:text-6xl font-black italic uppercase tracking-tighter leading-tight mb-6">
+          {/* RIGHT CONTENT: TITLES, BIO, CAST, & RECOMMENDATIONS */}
+          <div className="md:col-span-8 lg:col-span-8 pt-4 md:order-1 order-2">
+            {/* MAIN INFO BOX */}
+            <div className="bg-[#1a2235] border border-white/5 rounded-[3.5rem] p-10 md:p-14 mb-8">
+              <h1 className="text-6xl md:text-8xl font-black uppercase italic tracking-tighter mb-4 leading-[0.85]">
                 {details.title}
               </h1>
 
-              <div className="flex flex-wrap gap-3">
-                {details.genres?.map((g) => (
+              <div className="flex flex-wrap gap-3 mb-12">
+                {details.genres?.map((genre) => (
                   <span
-                    key={g.id}
-                    className="px-4 py-1.5 bg-blue-600/10 border border-blue-600/20 text-blue-400 rounded-full text-[10px] font-black uppercase tracking-widest italic"
+                    key={genre.id}
+                    className="px-5 py-2 bg-blue-600/10 border border-blue-600/30 text-blue-500 rounded-full text-[10px] font-black uppercase tracking-widest"
                   >
-                    {g.name}
+                    {genre.name}
                   </span>
                 ))}
+
+                <span className="px-5 py-2 bg-white/5 border border-white/10 text-gray-400 rounded-full text-[10px] font-black uppercase tracking-widest">
+                  {details.release_date?.split("-")[0]}
+                </span>
               </div>
-            </div>
 
-            {/* TRAILER */}
-            {details.videos?.results[0] && (
-              <div className="aspect-video rounded-[3rem] overflow-hidden border border-white/10 shadow-2xl bg-black">
-                <iframe
-                  src={`https://www.youtube.com/embed/${details.videos.results[0].key}?autoplay=0&rel=0`}
-                  className="w-full h-full"
-                  allowFullScreen
-                ></iframe>
+              {/* STORYLINE */}
+              <div className="mt-8 mb-12">
+                <h3 className="text-white font-black uppercase italic mb-4 tracking-widest text-sm flex items-center gap-3">
+                  <span className="w-6 h-1 bg-blue-600 rounded-full" />
+                  Overview
+                </h3>
+                <p className="text-gray-400 leading-relaxed font-medium text-lg italic">
+                  "{details.overview}"
+                </p>
               </div>
-            )}
 
-            <div className="space-y-4">
-              <h3 className="text-xs font-black text-blue-500 uppercase tracking-[0.4em]">
-                Storyline
-              </h3>
-              <p className="text-xl text-gray-300 leading-relaxed italic font-medium opacity-90">
-                "{details.overview}"
-              </p>
-            </div>
-
-            {/* CAST SECTION IS BACK */}
-            <div className="space-y-8 pb-10">
-              <h3 className="text-xs font-black text-blue-500 uppercase tracking-[0.4em]">
-                Featured Cast
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                {details.credits?.cast.slice(0, 4).map((person) => (
-                  <div key={person.id} className="group">
-                    <div className="relative overflow-hidden rounded-[2rem] mb-4 border border-white/5 group-hover:border-blue-500/50 transition-colors">
-                      <img
-                        src={`https://image.tmdb.org/t/p/w185${person.profile_path}`}
-                        className="w-full aspect-[4/5] object-cover grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-700"
-                        alt={person.name}
-                      />
-                    </div>
-                    <p className="text-xs font-black uppercase text-white truncate tracking-tighter">
-                      {person.name}
-                    </p>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase truncate tracking-widest mt-1">
-                      {person.character}
-                    </p>
+              {/* NEW: TOP CAST SECTION USING ArtistCard */}
+              <div className="space-y-8">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-2 h-8 bg-blue-600 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.4)]" />
+                    <h3 className="text-xl font-black uppercase italic tracking-tighter text-white">
+                      Top Cast
+                    </h3>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {details?.credits?.cast?.slice(0, 4).map((actor) => (
+                    <div key={actor.id}>
+                      <ArtistCard artist={actor} />
+                    </div>
+                  )) || (
+                    <p className="text-gray-500 italic">
+                      No cast information available.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* MORE LIKE THIS SECTION */}
+            <div className="px-4 space-y-8">
+              <div className="flex items-center gap-4">
+                <div className="w-2.5 h-10 bg-blue-600 rounded-full shadow-[0_0_20px_rgba(37,99,235,0.5)]" />
+                <h3 className="text-3xl font-black uppercase italic tracking-tighter">
+                  More Like This
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                {similarMovies.slice(0, 6).map((movie) => (
+                  <MovieCard key={movie.id} movie={movie} />
                 ))}
               </div>
             </div>
           </div>
         </div>
-        {/* MovieDetails.jsx - Similar Movies Section */}
-        <section className="mt-32 px-8 max-w-7xl mx-auto">
-          {/* Sticky Header with Backdrop Blur */}
-          <div className="sticky top-0 z-30 py-6 bg-[#080d17]/60 backdrop-blur-md border-b border-white/5 mb-10 -mx-8 px-8">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <h3 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em]">
-                  Discovery
-                </h3>
-                <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">
-                  More Like This
-                </h2>
-              </div>
-
-              {/* Visual Indicator */}
-              <div className="hidden md:flex items-center gap-2 text-gray-500">
-                <span className="text-[10px] font-black uppercase tracking-widest">
-                  Swipe to explore
-                </span>
-                <div className="w-12 h-[2px] bg-blue-600/30">
-                  <div className="w-1/2 h-full bg-blue-600 animate-pulse"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Horizontal Scroll Row */}
-          <div className="flex overflow-x-auto gap-8 pb-12 no-scrollbar scroll-smooth snap-x">
-            {similarMovies.length > 0 ? (
-              similarMovies.map((movie) => (
-                <div
-                  key={movie.id}
-                  className="min-w-[220px] md:min-w-[280px] snap-start"
-                >
-                  <MovieCard
-                    movie={movie}
-                    onAddToWatchlist={(selected) => {
-                      // Gagamitin natin yung modal state na nasa MovieDetails na
-                      setDetails(selected);
-                      setIsModalOpen(true);
-                    }}
-                  />
-                </div>
-              ))
-            ) : (
-              <div className="w-full py-20 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-[3rem]">
-                <p className="text-gray-500 italic font-bold uppercase text-xs tracking-widest animate-pulse">
-                  Curating similar vibes...
-                </p>
-              </div>
-            )}
-          </div>
-        </section>
       </div>
 
       {/* PLAYLIST MODAL */}
