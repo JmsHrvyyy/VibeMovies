@@ -65,6 +65,7 @@ function App() {
                   />
                 }
               />
+              <Route path="/tv/:id" element={<MovieDetails user={user} />} />
               <Route path="/movie/:id" element={<MovieDetails user={user} />} />
               <Route path="/artist/:id" element={<ArtistDetails />} />
               <Route path="/profile" element={<Profile user={user} />} />

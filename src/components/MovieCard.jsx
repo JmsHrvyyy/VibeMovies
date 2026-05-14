@@ -4,7 +4,9 @@ const MovieCard = ({ movie, onAddToWatchlist }) => {
   const navigate = useNavigate();
 
   const handleCardClick = () => {
-    navigate(`/movie/${movie.id}`);
+    // Kung galing sa search or artist credits, may media_type yan (movie or tv)
+    const type = movie.media_type === "tv" ? "tv" : "movie";
+    navigate(`/${type}/${movie.id}`);
   };
 
   return (
@@ -17,7 +19,7 @@ const MovieCard = ({ movie, onAddToWatchlist }) => {
         src={
           movie?.poster_path
             ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-            : "https://via.placeholder.com/500x750?text=No+Image"
+            : "https://placehold.co/500x750/1a2235/666?text=No+Poster"
         }
         alt={movie?.title || movie?.name}
         className="w-full aspect-[2/3] object-cover group-hover:scale-110 group-hover:rotate-2 transition-transform duration-700"
