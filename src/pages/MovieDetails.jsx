@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { getMovieDetails, getRecommendations } from "../services/api";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import {
+  getMovieDetails,
+  getRecommendations,
+  getTVDetails,
+} from "../services/api";
 import { db } from "../firebase";
 import {
   collection,
@@ -17,33 +21,37 @@ import ArtistCard from "../components/ArtistCard";
 const MovieDetails = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [details, setDetails] = useState(null);
+  const location = useLocation();
 
-  // Watchlist States
+  const isTV = location.pathname.includes("/tv/");
+
+  const [details, setDetails] = useState(null);
+  const [similarMovies, setSimilarMovies] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [watchlists, setWatchlists] = useState([]);
   const [isCreating, setIsCreating] = useState(false);
   const [newListName, setNewListName] = useState("");
 
-  const [similarMovies, setSimilarMovies] = useState([]);
-
   useEffect(() => {
     const fetchDetails = async () => {
-      // I-reset pareho para fresh start paglipat ng movie
       setDetails(null);
       setSimilarMovies([]);
 
       try {
-        const data = await getMovieDetails(id);
+        // dynamic fetching base sa isTV flag
+        const data = isTV ? await getTVDetails(id) : await getMovieDetails(id);
+
         if (data) {
           setDetails(data);
 
-          // Tawagin ang recommendations pagkatapos makuha ang main details
-          const similarData = await getRecommendations(id);
-
-          // I-filter lang yung mga movies na may poster para hindi pangit ang grid
-          const filteredSimilar = similarData.filter((m) => m.poster_path);
-          setSimilarMovies(filteredSimilar);
+          // dynamic recommendations/similar fetch
+          const similarData = await getRecommendations(
+            id,
+            isTV ? "tv" : "movie",
+          );
+          if (Array.isArray(similarData)) {
+            setSimilarMovies(similarData.filter((m) => m.poster_path));
+          }
         }
       } catch (error) {
         console.error("Failed to fetch details:", error);
@@ -52,20 +60,37 @@ const MovieDetails = ({ user }) => {
 
     fetchDetails();
     window.scrollTo(0, 0);
-  }, [id]);
+  }, [id, isTV]);
 
   useEffect(() => {
-    if (user) {
-      const q = query(
-        collection(db, "users", user.uid, "watchlists"),
-        orderBy("createdAt", "desc"),
+    if (!user) return;
+    const q = query(
+      collection(db, "users", user.uid, "watchlists"),
+      orderBy("createdAt", "desc"),
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setWatchlists(
+        snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
       );
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        setWatchlists(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-      });
-      return () => unsubscribe();
-    }
+    });
+    return () => unsubscribe();
   }, [user]);
+
+  if (!details) {
+    return (
+      <div className="min-h-screen bg-[#080d17] flex items-center justify-center text-white font-black italic">
+        LOADING {isTV ? "SERIES" : "MOVIE"}...
+      </div>
+    );
+  }
+
+  const title = details.title || details.name;
+  const releaseDate = details.release_date || details.first_air_date;
+  const runtime = isTV
+    ? `${details.number_of_seasons} Seasons`
+    : `${details.runtime} min`;
+  const genres = details.genres || [];
+  const cast = details.credits?.cast || [];
 
   const handleSaveToPlaylist = async (listId, existingMovies = []) => {
     // 1. I-check kung existing na yung movie ID sa array
@@ -140,7 +165,7 @@ const MovieDetails = ({ user }) => {
                 <img
                   src={`https://image.tmdb.org/t/p/w500${details.poster_path}`}
                   className="w-full aspect-[2/3] object-cover rounded-[3rem] shadow-2xl"
-                  alt={details.title}
+                  alt={details.title || details.name}
                 />
               </div>
 
@@ -169,16 +194,27 @@ const MovieDetails = ({ user }) => {
                   </div>
                 </div>
 
-                {/* RUNTIME (BOTTOM) */}
+                {/* DURATION / SEASONS (BOTTOM) */}
                 <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5 flex flex-col items-center justify-center">
                   <p className="text-gray-500 font-black text-[9px] uppercase tracking-[0.3em] mb-1">
-                    Duration
+                    {isTV ? "Series Length" : "Duration"}
                   </p>
                   <p className="text-white font-black text-xl italic tracking-tight">
-                    {details.runtime}{" "}
-                    <span className="text-[10px] text-gray-500 font-bold ml-1">
-                      MINS
-                    </span>
+                    {isTV ? (
+                      <>
+                        {details.number_of_seasons}{" "}
+                        <span className="text-[10px] text-gray-500 font-bold ml-1 uppercase">
+                          SEASONS
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        {details.runtime}{" "}
+                        <span className="text-[10px] text-gray-500 font-bold ml-1 uppercase">
+                          MINS
+                        </span>
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -189,8 +225,8 @@ const MovieDetails = ({ user }) => {
           <div className="md:col-span-8 lg:col-span-8 pt-4 md:order-1 order-2">
             {/* MAIN INFO BOX */}
             <div className="bg-[#1a2235] border border-white/5 rounded-[3.5rem] p-10 md:p-14 mb-8">
-              <h1 className="text-6xl md:text-8xl font-black uppercase italic tracking-tighter mb-4 leading-[0.85]">
-                {details.title}
+              <h1 className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black uppercase italic tracking-tighter mb-4 leading-[0.9] break-words overflow-hidden">
+                {details.title || details.name}
               </h1>
 
               <div className="flex flex-wrap gap-3 mb-12">
@@ -204,7 +240,11 @@ const MovieDetails = ({ user }) => {
                 ))}
 
                 <span className="px-5 py-2 bg-white/5 border border-white/10 text-gray-400 rounded-full text-[10px] font-black uppercase tracking-widest">
-                  {details.release_date?.split("-")[0]}
+                  {
+                    (details.release_date || details.first_air_date)?.split(
+                      "-",
+                    )[0]
+                  }
                 </span>
               </div>
 
@@ -219,7 +259,7 @@ const MovieDetails = ({ user }) => {
                 </p>
               </div>
 
-              {/* NEW: TOP CAST SECTION USING ArtistCard */}
+              {/* TOP CAST SECTION */}
               <div className="space-y-8">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -230,16 +270,14 @@ const MovieDetails = ({ user }) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  {details?.credits?.cast?.slice(0, 4).map((actor) => (
-                    <div key={actor.id}>
-                      <ArtistCard artist={actor} />
-                    </div>
-                  )) || (
-                    <p className="text-gray-500 italic">
-                      No cast information available.
-                    </p>
-                  )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {(details?.credits?.cast || [])
+                    .slice(0, 4)
+                    .map((actor, index) => (
+                      <div key={`cast-${actor.id}-${index}`} className="w-full">
+                        <ArtistCard artist={actor} />
+                      </div>
+                    ))}
                 </div>
               </div>
             </div>
@@ -254,8 +292,11 @@ const MovieDetails = ({ user }) => {
               </div>
 
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                {similarMovies.slice(0, 6).map((movie) => (
-                  <MovieCard key={movie.id} movie={movie} />
+                {(similarMovies || []).slice(0, 6).map((item, index) => (
+                  <MovieCard
+                    key={`rec-${item.id}-${index}`}
+                    movie={{ ...item, media_type: isTV ? "tv" : "movie" }}
+                  />
                 ))}
               </div>
             </div>

@@ -62,9 +62,13 @@ const ArtistDetails = () => {
           <div className="md:col-span-4 lg:col-span-4">
             <div className="bg-[#1a2235] p-4 rounded-[3rem] border border-white/5 shadow-2xl sticky top-12">
               <img
-                src={`https://image.tmdb.org/t/p/w500${artist.profile_path}`}
-                className="w-full aspect-[2/3] object-cover rounded-[2.5rem]"
+                src={
+                  artist.profile_path || artist.image
+                    ? `https://image.tmdb.org/t/p/w500${artist.profile_path || artist.image}`
+                    : "https://placehold.co/500x750/1a2235/666?text=No+Photo"
+                }
                 alt={artist.name}
+                className="w-full aspect-[2/3] object-cover rounded-[2.5rem]"
               />
 
               <div className="mt-8 space-y-6 px-4 pb-4">
@@ -123,8 +127,11 @@ const ArtistDetails = () => {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {topMovies.map((movie) => (
-                  <MovieCard key={movie.id} movie={movie} />
+                {topMovies.map((movie, index) => (
+                  <MovieCard
+                    key={`${movie.id}-${index}`} // <--- Siguraduhin itong index
+                    movie={movie}
+                  />
                 ))}
               </div>
             </div>

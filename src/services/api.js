@@ -32,12 +32,12 @@ export const searchMovies = async (query) => {
   }
 };
 
-export const getRecommendations = async (movieId) => {
+export const getRecommendations = async (id, type = "movie") => {
   const response = await fetch(
-    `${BASE_URL}/movie/${movieId}/recommendations?api_key=${API_KEY}`,
+    `${BASE_URL}/${type}/${id}/recommendations?api_key=${API_KEY}`,
   );
   const data = await response.json();
-  return data.results;
+  return data.results || [];
 };
 
 export const getNowPlaying = async () => {
@@ -48,16 +48,34 @@ export const getNowPlaying = async () => {
   return data.results;
 };
 
-export const getMovieDetails = async (movieId) => {
-  const response = await fetch(
-    `${BASE_URL}/movie/${movieId}?api_key=${API_KEY}&append_to_response=credits,videos`
-  );
-  return await response.json();
+export const getMovieDetails = async (id) => {
+  try {
+    const response = await fetch(
+      `${BASE_URL}/movie/${id}?api_key=${API_KEY}&append_to_response=credits,videos`,
+    );
+
+    if (!response.ok) {
+      console.warn(`Movie ID ${id} not found, checking if it's a TV show...`);
+      return null; // I-return ang null para ma-handle ng MovieDetails.jsx
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("API Error:", error);
+    return null;
+  }
 };
 
 export const getArtistDetails = async (id) => {
   const response = await fetch(
-    `${BASE_URL}/person/${id}?api_key=${API_KEY}&append_to_response=combined_credits`
+    `${BASE_URL}/person/${id}?api_key=${API_KEY}&append_to_response=combined_credits`,
+  );
+  return await response.json();
+};
+
+export const getTVDetails = async (id) => {
+  const response = await fetch(
+    `${BASE_URL}/tv/${id}?api_key=${API_KEY}&append_to_response=credits,videos`,
   );
   return await response.json();
 };
