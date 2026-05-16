@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 
-const MovieCard = ({ movie, onAddToWatchlist }) => {
+const MovieCard = ({ movie, onAddToWatchlist, isWatched }) => {
   const navigate = useNavigate();
 
   const handleCardClick = () => {
@@ -12,8 +12,18 @@ const MovieCard = ({ movie, onAddToWatchlist }) => {
   return (
     <div
       onClick={handleCardClick}
-      className="group relative cursor-pointer bg-white/5 rounded-[2rem] overflow-hidden border border-white/5 hover:border-blue-500/50 transition-all duration-500"
+      className={`group relative cursor-pointer rounded-[2rem] overflow-hidden border transition-all duration-500 ${
+        isWatched
+          ? "border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.2)]"
+          : "border-white/5 hover:border-blue-500/50"
+      }`}
     >
+      {isWatched && (
+        <div className="absolute top-4 right-4 z-10 bg-green-500 text-black px-3 py-1 rounded-full text-[10px] font-black uppercase italic shadow-lg">
+          Watched
+        </div>
+      )}
+
       {/* Movie Poster */}
       <img
         src={
@@ -22,7 +32,11 @@ const MovieCard = ({ movie, onAddToWatchlist }) => {
             : "https://placehold.co/500x750/1a2235/666?text=No+Poster"
         }
         alt={movie?.title || movie?.name}
-        className="w-full aspect-[2/3] object-cover group-hover:scale-110 group-hover:rotate-2 transition-transform duration-700"
+        className={`w-full aspect-[2/3] object-cover transition-all duration-700 ${
+          isWatched
+            ? "opacity-60 grayscale-[0.5] group-hover:grayscale-0"
+            : "group-hover:scale-110"
+        }`}
       />
 
       {/* Overlay info on hover */}

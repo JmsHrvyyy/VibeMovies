@@ -14,6 +14,8 @@ import {
   doc,
   updateDoc,
   addDoc,
+  setDoc,
+  deleteDoc,
 } from "firebase/firestore";
 import MovieCard from "../components/MovieCard";
 import ArtistCard from "../components/ArtistCard";
@@ -31,20 +33,17 @@ const MovieDetails = ({ user }) => {
   const [watchlists, setWatchlists] = useState([]);
   const [isCreating, setIsCreating] = useState(false);
   const [newListName, setNewListName] = useState("");
+  const [isWatched, setIsWatched] = useState(false);
+  const [watchedIds, setWatchedIds] = useState([]);
 
   useEffect(() => {
     const fetchDetails = async () => {
       setDetails(null);
       setSimilarMovies([]);
-
       try {
-        // dynamic fetching base sa isTV flag
         const data = isTV ? await getTVDetails(id) : await getMovieDetails(id);
-
         if (data) {
           setDetails(data);
-
-          // dynamic recommendations/similar fetch
           const similarData = await getRecommendations(
             id,
             isTV ? "tv" : "movie",
@@ -54,10 +53,9 @@ const MovieDetails = ({ user }) => {
           }
         }
       } catch (error) {
-        console.error("Failed to fetch details:", error);
+        console.error(error);
       }
     };
-
     fetchDetails();
     window.scrollTo(0, 0);
   }, [id, isTV]);
@@ -76,13 +74,55 @@ const MovieDetails = ({ user }) => {
     return () => unsubscribe();
   }, [user]);
 
+  // Listener para sa CURRENT movie
+  useEffect(() => {
+    if (!user || !id) return;
+    const watchedRef = doc(db, "users", user.uid, "watchedMovies", id);
+    const unsubscribe = onSnapshot(watchedRef, (docSnap) => {
+      setIsWatched(docSnap.exists());
+    });
+    return () => unsubscribe();
+  }, [user, id]);
+
+  // Listener para sa LAHAT ng watched IDs (para sa More Like This)
+  useEffect(() => {
+    if (!user) return;
+    const watchedQuery = collection(db, "users", user.uid, "watchedMovies");
+    const unsubscribe = onSnapshot(watchedQuery, (snapshot) => {
+      const ids = snapshot.docs.map((doc) => doc.id);
+      setWatchedIds(ids);
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  // 3. EARLY RETURN (Dito na siya dapat, pagkatapos ng lahat ng Hooks)
   if (!details) {
     return (
-      <div className="min-h-screen bg-[#080d17] flex items-center justify-center text-white font-black italic">
-        LOADING {isTV ? "SERIES" : "MOVIE"}...
+      <div className="min-h-screen bg-[#080d17] flex items-center justify-center text-blue-500 font-black italic uppercase tracking-widest">
+        Loading Vibe...
       </div>
     );
   }
+
+  const toggleWatched = async () => {
+    if (!user) return alert("Please login first!");
+    const watchedRef = doc(db, "users", user.uid, "watchedMovies", id);
+    try {
+      if (isWatched) {
+        await deleteDoc(watchedRef);
+      } else {
+        await setDoc(watchedRef, {
+          id: id,
+          title: details.title || details.name,
+          poster_path: details.poster_path,
+          type: isTV ? "tv" : "movie",
+          watchedAt: new Date().toISOString(),
+        });
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   const title = details.title || details.name;
   const releaseDate = details.release_date || details.first_air_date;
@@ -175,6 +215,17 @@ const MovieDetails = ({ user }) => {
                 className="w-full py-6 bg-blue-600 hover:bg-blue-500 text-white rounded-[2.5rem] font-black uppercase italic tracking-widest text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.3)] hover:scale-[1.02]"
               >
                 + Add to Watchlist
+              </button>
+
+              <button
+                onClick={toggleWatched}
+                className={`w-full py-5 rounded-[2.5rem] font-black uppercase italic transition-all transform hover:scale-[1.02] active:scale-95 shadow-xl border-2 flex items-center justify-center gap-2 ${
+                  isWatched
+                    ? "bg-green-600/20 border-green-500 text-green-500"
+                    : "bg-white/5 border-white/10 text-white hover:border-green-500"
+                }`}
+              >
+                {isWatched ? "✓ Watched" : "Mark as Watched"}
               </button>
 
               {/* Quick Info - Vertically Stacked & Highlighted */}
@@ -296,6 +347,7 @@ const MovieDetails = ({ user }) => {
                   <MovieCard
                     key={`rec-${item.id}-${index}`}
                     movie={{ ...item, media_type: isTV ? "tv" : "movie" }}
+                    isWatched={watchedIds.includes(String(item.id))}
                   />
                 ))}
               </div>

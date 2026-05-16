@@ -2,12 +2,24 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getArtistDetails } from "../services/api";
 import MovieCard from "../components/MovieCard";
+import { db } from "../firebase";
+import { collection, onSnapshot } from "firebase/firestore";
 
-const ArtistDetails = () => {
+const ArtistDetails = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [artist, setArtist] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [watchedIds, setWatchedIds] = useState([]);
+
+  useEffect(() => {
+    if (!user) return;
+    const watchedQuery = collection(db, "users", user.uid, "watchedMovies");
+    const unsubscribe = onSnapshot(watchedQuery, (snapshot) => {
+      setWatchedIds(snapshot.docs.map((doc) => doc.id));
+    });
+    return () => unsubscribe();
+  }, [user]);
 
   useEffect(() => {
     const fetchArtist = async () => {
@@ -127,12 +139,24 @@ const ArtistDetails = () => {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {topMovies.map((movie, index) => (
-                  <MovieCard
-                    key={`${movie.id}-${index}`} // <--- Siguraduhin itong index
-                    movie={movie}
-                  />
-                ))}
+                {topMovies.map((movie, index) => {
+                  // Isang ligtas na pag-check kung kasama ang ID sa watchedIds array
+                  const isCurrentMovieWatched =
+                    watchedIds.includes(String(movie.id)) ||
+                    watchedIds.includes(Number(movie.id));
+
+                  return (
+                    <MovieCard
+                      key={`${movie.id}-${index}`}
+                      movie={{
+                        ...movie,
+                        // Pinipilit nating lagyan ng media_type para tama ang navigate sa loob ng MovieCard
+                        media_type: movie.media_type || "movie",
+                      }}
+                      isWatched={isCurrentMovieWatched}
+                    />
+                  );
+                })}
               </div>
             </div>
           </div>

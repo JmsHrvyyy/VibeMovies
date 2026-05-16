@@ -5,6 +5,7 @@ const Sidebar = ({ isOpen, setIsOpen, user }) => {
   const menuItems = [
     { name: "Home", icon: "🏠", path: "/" },
     { name: "Watchlist", icon: "📁", path: "/watchlist" },
+    { name: "Watched Movies", icon: "✅", path: "/watched" },
     { name: "Profile", icon: "👤", path: "/profile" },
     { name: "Settings", icon: "⚙️", path: "/settings" },
   ];

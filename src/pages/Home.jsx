@@ -42,7 +42,18 @@ const Home = ({ user, searchResults, searchLoading }) => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedDetails, setSelectedDetails] = useState(null);
 
+  const [watchedIds, setWatchedIds] = useState([]);
+
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) return;
+    const watchedQuery = collection(db, "users", user.uid, "watchedMovies");
+    const unsubscribe = onSnapshot(watchedQuery, (snapshot) => {
+      setWatchedIds(snapshot.docs.map((doc) => doc.id));
+    });
+    return () => unsubscribe();
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -136,36 +147,43 @@ const Home = ({ user, searchResults, searchLoading }) => {
     );
 
   // Function para i-save ang movie sa isang existing watchlist
-  const handleSaveToPlaylist = async (listId, existingMovies = []) => {
-    // 1. I-check kung existing na yung movie ID sa array
-    const isAlreadyAdded = existingMovies.some(
-      (movie) => movie.id === details.id,
-    );
+  const handleSaveToPlaylist = async (playlistId, currentMovies = []) => {
+    // DISKARTENG FLEXIBLE: Gamitin ang selectedDetails, kung wala, gamitin ang featuredMovie
+    const activeMovie = selectedDetails || featuredMovie;
 
-    if (isAlreadyAdded) {
-      // 2. Kapag nahanap, mag-show ng message at 'wag nang ituloy ang save
-      alert("This movie is already in this playlist! 🎥");
-      return; // Stop the function here
+    if (!activeMovie) {
+      alert("No movie selected!");
+      return;
     }
 
-    // 3. Kung wala pa, proceed sa pag-save
-    const movieData = {
-      id: details.id,
-      title: details.title,
-      poster: details.poster_path,
-      addedAt: new Date().toISOString(),
-    };
+    // Siguraduhing parehong Number o String ang pag-check ng ID
+    const movieExists = currentMovies.some(
+      (m) => String(m.id) === String(activeMovie.id),
+    );
+
+    if (movieExists) {
+      alert("This movie is already in the watchlist!");
+      return;
+    }
+
+    const updatedMovies = [
+      ...currentMovies,
+      {
+        id: activeMovie.id,
+        title: activeMovie.title || activeMovie.name,
+        poster_path: activeMovie.poster_path,
+        release_date:
+          activeMovie.release_date || activeMovie.first_air_date || "",
+      },
+    ];
 
     try {
-      const listRef = doc(db, "users", user.uid, "watchlists", listId);
-      await updateDoc(listRef, {
-        movies: [...existingMovies, movieData],
-      });
-
+      const playlistRef = doc(db, "users", user.uid, "watchlists", playlistId);
+      await updateDoc(playlistRef, { movies: updatedMovies });
       setIsModalOpen(false);
-      alert("Successfully added to playlist! ✅");
+      alert("Successfully added to playlist! 🎬"); // Para may feedback ka na pumasok talaga
     } catch (error) {
-      console.error("Error adding movie:", error);
+      console.error("Error adding movie to playlist:", error);
     }
   };
 
@@ -270,7 +288,11 @@ const Home = ({ user, searchResults, searchLoading }) => {
                   key={movie.id}
                   className="min-w-[200px] md:min-w-[260px] hover:scale-105 transition-transform duration-500"
                 >
-                  <MovieCard movie={movie} />
+                  <MovieCard
+                    key={movie.id}
+                    movie={movie}
+                    isWatched={watchedIds.includes(String(movie.id))} // Dagdag ito
+                  />
                 </div>
               ))}
             </div>
@@ -297,6 +319,7 @@ const Home = ({ user, searchResults, searchLoading }) => {
                   setFeaturedMovie(movieData); // Gamitin natin yung existing state mo for selected movie
                   setIsModalOpen(true);
                 }}
+                isWatched={watchedIds.includes(String(movie.id))}
               />
             ))}
           </div>
@@ -365,26 +388,25 @@ const Home = ({ user, searchResults, searchLoading }) => {
                 </button>
               )}
 
-              <div className="space-y-2 max-h-60 overflow-y-auto no-scrollbar">
+              <div className="space-y-3 max-h-72 overflow-y-auto no-scrollbar pr-2">
                 {watchlists.map((list) => (
                   <button
                     key={list.id}
-                    onClick={() => handleSaveToPlaylist(list.id, list.movies)} // Pinindot ang folder
-                    className="w-full p-4 bg-white/5 hover:bg-white/10 rounded-2xl text-left flex items-center justify-between group transition-all"
+                    onClick={() =>
+                      handleSaveToPlaylist(list.id, list.movies || [])
+                    }
+                    className="w-full p-6 bg-white/5 hover:bg-blue-600/10 border border-transparent hover:border-blue-500/30 rounded-[1.8rem] text-left flex items-center justify-between group transition-all"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">📁</span>
-                      <div>
-                        <p className="text-white font-bold text-sm uppercase">
-                          {list.name}
-                        </p>
-                        <p className="text-gray-500 text-[10px] uppercase font-black tracking-widest">
-                          {list.movies?.length || 0} Movies
-                        </p>
-                      </div>
+                    <div>
+                      <p className="text-white font-black text-xs uppercase tracking-widest">
+                        {list.name}
+                      </p>
+                      <p className="text-gray-500 text-[9px] font-bold uppercase mt-1 tracking-widest">
+                        {list.movies?.length || 0} Movies
+                      </p>
                     </div>
-                    <span className="opacity-0 group-hover:opacity-100 text-blue-500 font-black">
-                      +
+                    <span className="text-blue-500 font-black opacity-0 group-hover:opacity-100 transition-all">
+                      ADD...
                     </span>
                   </button>
                 ))}
