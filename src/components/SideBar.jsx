@@ -4,6 +4,7 @@ import { logout } from "../services/auth";
 const Sidebar = ({ isOpen, setIsOpen, user }) => {
   const menuItems = [
     { name: "Home", icon: "🏠", path: "/" },
+    { name: "Newsfeed", icon: "📰", path: "/feed" },
     { name: "Watchlist", icon: "📁", path: "/watchlist" },
     { name: "Watched Movies", icon: "✅", path: "/watched" },
     { name: "Profile", icon: "👤", path: "/profile" },

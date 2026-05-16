@@ -12,6 +12,8 @@ import Home from "./pages/Home";
 import MovieDetails from "./pages/MovieDetails";
 import ArtistDetails from "./pages/ArtistDetails";
 import WatchedMovies from "./pages/WatchedMovies";
+import Newsfeed from "./pages/Newsfeed";
+import ManagePost from "./pages/ManagePost";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -72,6 +74,8 @@ function App() {
               <Route path="/profile" element={<Profile user={user} />} />
               <Route path="/watchlist" element={<Watchlist user={user} />} />
               <Route path="/watched" element={<WatchedMovies user={user} />} />
+              <Route path="/feed" element={<Newsfeed user={user} />} />
+              <Route path="/manage-posts" element={<ManagePost user={user} />} />
             </Routes>
           </main>
         </div>
