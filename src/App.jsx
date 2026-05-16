@@ -11,6 +11,7 @@ import Watchlist from "./pages/Watchlist";
 import Home from "./pages/Home";
 import MovieDetails from "./pages/MovieDetails";
 import ArtistDetails from "./pages/ArtistDetails";
+import WatchedMovies from "./pages/WatchedMovies";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -67,9 +68,10 @@ function App() {
               />
               <Route path="/tv/:id" element={<MovieDetails user={user} />} />
               <Route path="/movie/:id" element={<MovieDetails user={user} />} />
-              <Route path="/artist/:id" element={<ArtistDetails />} />
+              <Route path="/artist/:id" element={<ArtistDetails user={user} />} />
               <Route path="/profile" element={<Profile user={user} />} />
               <Route path="/watchlist" element={<Watchlist user={user} />} />
+              <Route path="/watched" element={<WatchedMovies user={user} />} />
             </Routes>
           </main>
         </div>

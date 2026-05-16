@@ -22,6 +22,20 @@ const WatchlistPage = ({ user }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  const [watchedIds, setWatchedIds] = useState([]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    // Kukunin ang lahat ng IDs sa watchedMovies collection
+    const watchedQuery = collection(db, "users", user.uid, "watchedMovies");
+    const unsubscribe = onSnapshot(watchedQuery, (snapshot) => {
+      // I-save ang lahat ng document IDs sa state
+      setWatchedIds(snapshot.docs.map((doc) => doc.id));
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   // Load playlists real-time
   useEffect(() => {
@@ -266,6 +280,7 @@ const WatchlistPage = ({ user }) => {
                     ...movie,
                     poster_path: movie.poster, // I-map natin yung 'poster' field mo sa 'poster_path' na gamit ng MovieCard
                   }}
+                  isWatched={watchedIds.includes(String(movie.id))}
                 />
 
                 {/* 2. REMOVE MOVIE BUTTON (Mananatili ang logic at style mo) */}
