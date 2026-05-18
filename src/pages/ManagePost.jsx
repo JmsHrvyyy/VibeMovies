@@ -404,25 +404,48 @@ const ManagedPostCard = ({
         </p>
       )}
 
-      {post.movies && post.movies.length > 0 && (
+      {/* DYNAMIC ATTACHMENTS FOR FOLDER OR MEDIA */}
+      {post.postType === "watchlist" ? (
         <div className="pt-2 border-t border-white/5 mt-2">
-          <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-3">
-            🎬 Tagged Media ({post.movies.length}):
+          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-2">
+            📂 Shared Watchlist Folder:
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {post.movies.map((mv) => (
-              <MovieCard
-                key={mv.id}
-                movie={{
-                  id: mv.id,
-                  title: mv.title,
-                  poster_path: mv.poster_path,
-                  media_type: mv.media_type,
-                }}
-              />
-            ))}
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 inline-block max-w-xs">
+            <h4 className="text-xs font-black uppercase tracking-wide text-white truncate">
+              📁 {post.watchListName}
+            </h4>
+            <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">
+              {post.watchlistMovies?.length || 0} films enclosed
+            </p>
           </div>
         </div>
+      ) : (
+        post.movies &&
+        post.movies.length > 0 && (
+          <div className="pt-2 border-t border-white/5 mt-2">
+            <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-3">
+              🎬 Tagged Media ({post.movies.length}):
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {post.movies.map((mv) => (
+                <MovieCard
+                  key={mv.id}
+                  movie={{
+                    id: mv.id,
+                    title: mv.title,
+                    poster_path: mv.poster_path,
+                    media_type: mv.media_type,
+                  }}
+                />
+              ))}
+            </div>
+            <div className="flex items-center justify-end text-[9px] font-black uppercase tracking-widest text-gray-500 italic pt-1">
+              {post.likes && post.likes.length > 0
+                ? `❤️ ${post.likes.length} ${post.likes.length === 1 ? "Vibe" : "Vibes"} received`
+                : "🤍 No vibes received yet"}
+            </div>
+          </div>
+        )
       )}
 
       <div className="flex items-center gap-2 pt-2 border-t border-white/5">
