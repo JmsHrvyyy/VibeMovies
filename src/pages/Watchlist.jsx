@@ -24,32 +24,57 @@ const WatchlistPage = ({ user }) => {
   const [searchResults, setSearchResults] = useState([]);
   const [watchedIds, setWatchedIds] = useState([]);
 
+  // PINAGSAMANG HOOKS PARA WALANG ERRORS SA RULES OF HOOKS AT WALANG CRASH
   useEffect(() => {
     if (!user) return;
 
-    // Kukunin ang lahat ng IDs sa watchedMovies collection
+    // 1. Kukunin ang lahat ng IDs sa watchedMovies collection
     const watchedQuery = collection(db, "users", user.uid, "watchedMovies");
-    const unsubscribe = onSnapshot(watchedQuery, (snapshot) => {
-      // I-save ang lahat ng document IDs sa state
+    const unsubscribeWatched = onSnapshot(watchedQuery, (snapshot) => {
       setWatchedIds(snapshot.docs.map((doc) => doc.id));
     });
 
-    return () => unsubscribe();
-  }, [user]);
-
-  // Load playlists real-time
-  useEffect(() => {
-    if (!user) return;
+    // 2. Kukunin ang mga watchlists naman
     const q = query(
       collection(db, "users", user.uid, "watchlists"),
       orderBy("createdAt", "desc"),
     );
-    return onSnapshot(q, (snapshot) => {
-      setWatchlists(
-        snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
-      );
+    const unsubscribeWatchlists = onSnapshot(q, (snapshot) => {
+      const lists = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setWatchlists(lists);
+
+      if (selectedList) {
+        const updatedSelected = lists.find((l) => l.id === selectedList.id);
+        if (updatedSelected) {
+          setSelectedList(updatedSelected);
+        }
+      }
     });
-  }, [user]);
+
+    // Linisin ang parehong listeners kapag nag-unmount ang page
+    return () => {
+      unsubscribeWatched();
+      unsubscribeWatchlists();
+    };
+  }, [user, selectedList]);
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
+        <span className="text-4xl mb-4">📁</span>
+        <h3 className="text-lg font-black uppercase tracking-wider text-white">
+          Please Log In First
+        </h3>
+        <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
+          Mag-login muna para makalikha, makapag-save, at makapag-share ng
+          sarili mong mga movie folders at watchlist!
+        </p>
+      </div>
+    );
+  }
 
   const createList = async () => {
     if (!newListName.trim()) return;

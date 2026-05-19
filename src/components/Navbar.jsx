@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { loginWithGoogle } from "../services/auth";
 
-const Navbar = ({ onSearch, toggleSidebar, user }) => {
+const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
   const [query, setQuery] = useState("");
 
   const handleSubmit = (e) => {
@@ -17,23 +17,12 @@ const Navbar = ({ onSearch, toggleSidebar, user }) => {
         {/* Left: Logo */}
         <div className="flex items-center gap-2 md:gap-4 min-w-fit">
           <button
-            onClick={toggleSidebar}
-            className="p-2 hover:bg-gray-800 rounded-lg lg:hidden"
+            type="button"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="p-2 -ml-2 text-gray-400 hover:text-white lg:hidden relative z-50 pointer-events-auto"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6 text-gray-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
+            {/* Hamburger Icon (SVG or Emoji) */}
+            <span className="text-xl">☰</span>
           </button>
           <Link
             to="/"

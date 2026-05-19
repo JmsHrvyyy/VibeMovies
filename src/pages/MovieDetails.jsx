@@ -211,7 +211,15 @@ const MovieDetails = ({ user }) => {
 
               {/* Action Button: Add to Watchlist */}
               <button
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => {
+                  if (!user) {
+                    alert(
+                      "Please Login First!",
+                    );
+                    return;
+                  }
+                  setIsModalOpen(true);
+                }}
                 className="w-full py-6 bg-blue-600 hover:bg-blue-500 text-white rounded-[2.5rem] font-black uppercase italic tracking-widest text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.3)] hover:scale-[1.02]"
               >
                 + Add to Watchlist

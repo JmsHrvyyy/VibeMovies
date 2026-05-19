@@ -256,7 +256,15 @@ const Home = ({ user, searchResults, searchLoading }) => {
                 {/* Home.jsx - Hero Section Action Buttons */}
                 <div className="flex gap-4 pt-4">
                   <button
-                    onClick={() => setIsModalOpen(true)} // BUBUKSAN ANG MODAL
+                    onClick={() => {
+                      if (!user) {
+                        alert(
+                          "Please Login First!",
+                        );
+                        return;
+                      }
+                      setIsModalOpen(true); // BUBUKSAN ANG MODAL KAPAG NAKA-LOGIN
+                    }}
                     className="bg-blue-600 text-white px-10 py-4 rounded-2xl font-black uppercase text-xs hover:scale-105 transition-all shadow-xl shadow-blue-900/20"
                   >
                     + Add to Watchlist
