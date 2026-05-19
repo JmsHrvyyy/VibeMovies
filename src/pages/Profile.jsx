@@ -4,6 +4,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { searchMovies } from "../services/api";
 import MovieCard from "../components/MovieCard";
 import ArtistCard from "../components/ArtistCard";
+import { useParams, useNavigate } from "react-router-dom";
 
 const Profile = ({ user }) => {
   const [loading, setLoading] = useState(true);
@@ -18,31 +19,72 @@ const Profile = ({ user }) => {
     favGenres: [],
     favActors: [],
     favMovies: [],
+    displayName: "",
+    photoURL: "",
   });
+
+  const { uid } = useParams();
+  const navigate = useNavigate();
+  const targetUid = uid || user?.uid;
+  const isOwnProfile = targetUid === user?.uid;
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (user?.uid) {
-        try {
-          const docRef = doc(db, "users", user.uid);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            setProfileData({
-              ...data,
-              favGenres: data.favGenres || [], // Fallback sa empty array
-              favActors: data.favActors || [], // Fallback sa empty array
-            });
-          }
-        } catch (error) {
-          console.error("Error fetching profile:", error);
-        } finally {
-          setLoading(false);
+      if (!targetUid) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const docRef = doc(db, "users", targetUid);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setProfileData({
+            bio: data.bio || "",
+            favoriteMovieCover: data.favoriteMovieCover || "",
+            favGenres: data.favGenres || [],
+            favActors: data.favActors || [],
+            favMovies: data.favMovies || [],
+            // Babasahin muna yung bagong saved nickname sa DB, kung wala (halimbawa, lumang test), magfa-fallback sa Google handle o placeholder
+            displayName:
+              data.displayName ||
+              data.userName ||
+              (isOwnProfile ? user?.displayName : "Movie Viber"),
+            photoURL:
+              data.photoURL ||
+              data.userPhoto ||
+              (isOwnProfile
+                ? user?.photoURL
+                : "https://via.placeholder.com/150"),
+          });
+        } else {
+          // Kapag walang document o kung ikaw mismo ito (default state fallback)
+          setProfileData({
+            bio: "",
+            favoriteMovieCover: "",
+            favGenres: [],
+            favActors: [],
+            favMovies: [],
+            displayName: isOwnProfile
+              ? user?.displayName
+              : `Movie Viber (${targetUid.substring(0, 5)})`,
+            photoURL: isOwnProfile
+              ? user?.photoURL
+              : "https://api.dicebear.com/7.x/bottts/svg?seed=" + targetUid,
+          });
         }
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+      } finally {
+        setLoading(false);
       }
     };
+
     fetchProfile();
-  }, [user]);
+  }, [targetUid, user]); // Siguraduhing kasama si targetUid dito para mag-trigger tuwing lilipat ng profile!
 
   const handleSaveBio = async () => {
     try {
@@ -79,6 +121,21 @@ const Profile = ({ user }) => {
       console.error("Error saving cover:", error);
     }
   };
+
+  if (!user && !uid) {
+    return (
+      <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
+        <span className="text-4xl mb-4">👤</span>
+        <h3 className="text-lg font-black uppercase tracking-wider text-white">
+          Please Log In First
+        </h3>
+        <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
+          Kailangan mong mag-sign in para ma-setup at ma-customize ang sarili
+          mong profile space.
+        </p>
+      </div>
+    );
+  }
 
   if (loading)
     return <div className="p-10 text-center">Loading Profile...</div>;
@@ -209,37 +266,50 @@ const Profile = ({ user }) => {
 
   return (
     <div className="p-4 md:p-10 max-w-6xl mx-auto space-y-10">
+      {!isOwnProfile && (
+        <button
+          onClick={() => navigate("/feed")}
+          className="mb-6 flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-black uppercase tracking-wider text-gray-400 hover:text-white transition-all duration-200 group w-fit"
+        >
+          <span className="transform group-hover:-translate-x-1 transition-transform">
+            ←
+          </span>
+          Back to Newsfeed
+        </button>
+      )}
       {/* HEADER SECTION */}
       <div className="bg-[#0f172a] rounded-[2rem] p-6 md:p-10 border border-white/10 relative overflow-hidden flex items-center min-h-[250px] shadow-2xl">
         {/* EDIT COVER BUTTON */}
-        <button
-          onClick={() => {
-            setModalType("cover");
-            setIsModalOpen(true);
-          }}
-          className="absolute top-5 right-5 z-30 p-3 bg-black/50 hover:bg-blue-600 backdrop-blur-md rounded-full border border-white/20 transition-all group"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5 text-white group-hover:scale-110"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+        {isOwnProfile && (
+          <button
+            onClick={() => {
+              setModalType("cover");
+              setIsModalOpen(true);
+            }}
+            className="absolute top-5 right-5 z-30 p-3 bg-black/50 hover:bg-blue-600 backdrop-blur-md rounded-full border border-white/20 transition-all group"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-            />
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-          </svg>
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 text-white group-hover:scale-110"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+          </button>
+        )}
 
         {/* BACKGROUND IMAGE & GRADIENT (The Fade Transition) */}
         {profileData.favoriteMovieCover && (
@@ -259,13 +329,17 @@ const Profile = ({ user }) => {
         {/* PROFILE INFO */}
         <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 text-center md:text-left w-full">
           <img
-            src={user?.photoURL}
+            src={
+              profileData.photoURL ||
+              user?.photoURL ||
+              "https://via.placeholder.com/150"
+            }
             className="w-24 h-24 md:w-40 md:h-40 rounded-full border-4 border-blue-500 shadow-2xl object-cover shrink-0"
             alt=""
           />
           <div className="min-w-0 flex-1">
             <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter">
-              {user?.displayName}
+              {profileData.displayName || user?.displayName || "Movie Viber"}
             </h1>
 
             <div className="flex items-center justify-center md:justify-start gap-3 mt-3">
@@ -291,25 +365,27 @@ const Profile = ({ user }) => {
                   <p className="text-gray-400 italic text-sm md:text-lg">
                     {profileData.bio || "Movie Explorer"}
                   </p>
-                  <button
-                    onClick={() => setIsEditingBio(true)}
-                    className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 text-gray-500 hover:text-blue-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
+                  {isOwnProfile && (
+                    <button
+                      onClick={() => setIsEditingBio(true)}
+                      className="p-1.5 hover:bg-white/10 rounded-full transition-colors"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                      />
-                    </svg>
-                  </button>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-gray-500 hover:text-blue-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                        />
+                      </svg>
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -327,7 +403,7 @@ const Profile = ({ user }) => {
               </span>
               Favorite Genres
             </h3>
-            {(profileData.favGenres || []).length < 3 && (
+            {isOwnProfile && (profileData.favGenres || []).length < 3 && (
               <button
                 onClick={() => {
                   setModalType("genre");
@@ -352,25 +428,27 @@ const Profile = ({ user }) => {
                     {genre}
                   </span>
                 </div>
-                <button
-                  onClick={() => removeGenre(genre)}
-                  className="opacity-0 group-hover:opacity-100 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white p-2 rounded-lg transition-all duration-200"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+                {isOwnProfile && (
+                  <button
+                    onClick={() => removeGenre(genre)}
+                    className="opacity-0 group-hover:opacity-100 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white p-2 rounded-lg transition-all duration-200"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={3}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={3}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                )}
               </div>
             ))}
             {profileData.favGenres?.length === 0 && (
@@ -403,33 +481,35 @@ const Profile = ({ user }) => {
                 <ArtistCard artist={actor} />
 
                 {/* Remove Button */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeActor(actor.id);
-                  }}
-                  className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 p-3 bg-black/60 hover:bg-red-600 text-white rounded-2xl backdrop-blur-md transition-all shadow-2xl"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+                {isOwnProfile && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeActor(actor.id);
+                    }}
+                    className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 p-3 bg-black/60 hover:bg-red-600 text-white rounded-2xl backdrop-blur-md transition-all shadow-2xl"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={3}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={3}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                )}
               </div>
             ))}
 
             {/* Placeholder Slot - Sinlaki rin ng mga cards */}
-            {profileData.favActors?.length < 3 && (
+            {isOwnProfile && profileData.favActors?.length < 3 && (
               <button
                 onClick={() => {
                   setModalType("actor");
@@ -460,7 +540,7 @@ const Profile = ({ user }) => {
             </span>
             Top 5 Favorites
           </h3>
-          {(profileData.favMovies || []).length < 5 && (
+          {isOwnProfile && (profileData.favMovies || []).length < 5 && (
             <button
               onClick={() => {
                 setModalType("movie");
@@ -484,34 +564,35 @@ const Profile = ({ user }) => {
                   poster_path: movie.poster_path || movie.poster,
                 }}
               />
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeMovie(movie.id);
-                }}
-                className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 p-2 bg-black/60 hover:bg-red-600 text-white rounded-xl backdrop-blur-md transition-all"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-3 w-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+              {isOwnProfile && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeMovie(movie.id);
+                  }}
+                  className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 p-2 bg-black/60 hover:bg-red-600 text-white rounded-xl backdrop-blur-md transition-all"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={3}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-3 w-3"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={3}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              )}
             </div>
           ))}
 
           {/* 2. Lalabas lang ang 'Add' button kung wala pang 5 movies */}
-          {profileData.favMovies?.length < 5 && (
+          {isOwnProfile && profileData.favMovies?.length < 5 && (
             <button
               onClick={() => {
                 setModalType("movie");

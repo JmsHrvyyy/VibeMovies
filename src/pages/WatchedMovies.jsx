@@ -36,6 +36,33 @@ const WatchedMovies = ({ user }) => {
     return () => unsubscribe();
   }, [user]);
 
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
+        <span className="text-4xl mb-4">✅</span>
+        <h3 className="text-lg font-black uppercase tracking-wider text-white">
+          Please Log In First
+        </h3>
+        <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
+          Mag-sign in muna para makita ang listahan ng mga pelikulang natapos mo
+          nang mapanood at ma-arkiba ang iyong kasaysayan!
+        </p>
+      </div>
+    );
+  }
+
+  if (!user) {
+  return (
+    <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
+      <span className="text-4xl mb-4">✅</span>
+      <h3 className="text-lg font-black uppercase tracking-wider text-white">Please Log In First</h3>
+      <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
+        Mag-sign in muna para makita ang listahan ng mga pelikulang natapos mo nang mapanood at ma-arkiba ang iyong kasaysayan!
+      </p>
+    </div>
+  );
+}
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#080d17] flex items-center justify-center text-green-500 font-black italic uppercase tracking-widest">
