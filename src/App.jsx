@@ -16,6 +16,7 @@ import WatchedMovies from "./pages/WatchedMovies";
 import Newsfeed from "./pages/Newsfeed";
 import ManagePost from "./pages/ManagePost";
 import Settings from "./pages/Settings";
+import AiDiscover from "./pages/AiDiscover";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -148,6 +149,7 @@ function App() {
                 element={<ManagePost user={user} />}
               />
               <Route path="/settings" element={<Settings user={user} />} />
+              <Route path="/ai-discover" element={<AiDiscover user={user} />} />
             </Routes>
           </main>
         </div>

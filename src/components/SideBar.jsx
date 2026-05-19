@@ -7,6 +7,7 @@ const Sidebar = ({ isOpen, setIsOpen, user }) => {
     { name: "Newsfeed", icon: "📰", path: "/feed" },
     { name: "Watchlist", icon: "📁", path: "/watchlist" },
     { name: "Watched Movies", icon: "✅", path: "/watched" },
+    { name: "AI Discover", icon: "🤖", path: "/ai-discover" },
     { name: "Profile", icon: "👤", path: "/profile" },
     { name: "Settings", icon: "⚙️", path: "/settings" },
   ];
