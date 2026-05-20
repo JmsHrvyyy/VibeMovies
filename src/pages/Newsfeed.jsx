@@ -15,6 +15,18 @@ import {
 import { searchMovies } from "../services/api";
 import MovieCard from "../components/MovieCard";
 import { useNavigate } from "react-router-dom";
+import {
+  Lock,
+  Settings,
+  FolderHeart,
+  Clapperboard,
+  Heart,
+  MessageSquare,
+  Copy,
+  Check,
+  Loader2,
+  Film,
+} from "lucide-react";
 
 // =========================================================
 // MINI SUB-COMPONENT: INLINE MOVIE TAG BADGE (CLICKABLE FOR DETAILS)
@@ -38,8 +50,9 @@ const AttachedMovieBadge = ({ movie }) => {
         <p className="text-[10px] font-black uppercase tracking-wide text-white truncate group-hover:text-blue-400 transition-colors">
           {movie.title}
         </p>
-        <span className="text-[7px] font-black uppercase tracking-widest text-blue-500 bg-blue-500/10 border border-blue-500/20 px-1 py-0.5 rounded mt-0.5 inline-block group-hover:bg-blue-500/20 transition-colors">
-          🎬 {movie.media_type || "Movie"}
+        <span className="text-[7px] font-black uppercase tracking-widest text-blue-500 bg-blue-500/10 border border-blue-500/20 px-1 py-0.5 rounded mt-0.5 inline-flex items-center gap-1 group-hover:bg-blue-500/20 transition-colors">
+          <Clapperboard className="w-2 h-2 text-blue-500" />
+          {movie.media_type || "Movie"}
         </span>
       </div>
     </button>
@@ -49,7 +62,9 @@ const AttachedMovieBadge = ({ movie }) => {
 // =========================================================
 // SUB-COMPONENT: INDIVIDUAL COMMENT BLOCK WITH LIKES AND REPLIES
 // =========================================================
-const CommentBlock = ({ post, comment, currentUser }) => {
+const CommentBlock = ({ post, comment, currentUser, postId, user }) => {
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState("");
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [replies, setReplies] = useState([]);
@@ -202,14 +217,18 @@ const CommentBlock = ({ post, comment, currentUser }) => {
             onClick={handleCommentLike}
             className={`hover:text-white transition-colors flex items-center gap-1 ${isCommentLikedByMe ? "text-rose-500 hover:text-rose-400" : ""}`}
           >
-            {isCommentLikedByMe ? "❤️Liked" : "🤍Vibe"} (
+            <Heart
+              className={`w-2.5 h-2.5 ${isCommentLikedByMe ? "text-rose-500 fill-rose-500" : "text-gray-500"}`}
+            />
+            {isCommentLikedByMe ? "Liked" : "Vibe"} (
             {comment.likes?.length || 0})
           </button>
           <button
             onClick={() => setShowReplyForm(!showReplyForm)}
             className="hover:text-blue-400 transition-colors flex items-center gap-1"
           >
-            💬 Reply ({replies.length})
+            <MessageSquare className="w-2.5 h-2.5 text-gray-500" />
+            Reply ({replies.length})
           </button>
         </div>
 
@@ -302,7 +321,7 @@ const CommentBlock = ({ post, comment, currentUser }) => {
                   type="text"
                   value={replyMovieQuery}
                   onChange={(e) => setReplyMovieQuery(e.target.value)}
-                  placeholder="🎬 Tag film inside reply (optional)..."
+                  placeholder="Tag film inside reply (optional)..." // Tinanggal ang emoji para maging minimalist at malinis
                   className="w-full bg-white/[0.01] border border-white/5 rounded-lg px-3 py-1 text-[9px] focus:outline-none focus:border-blue-500/40 text-gray-500 placeholder-gray-700"
                 />
               </div>
@@ -541,7 +560,8 @@ const PostCard = ({ post, currentUser }) => {
       {post.postType === "watchlist" ? (
         <div className="pt-2 border-t border-white/5 mt-4">
           <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-            📂 Shared a Watchlist:
+            <FolderHeart className="w-3.5 h-3.5 text-blue-500" />
+            Shared a Watchlist:
           </p>
           <div
             onClick={() => setIsListModalOpen(true)}
@@ -572,8 +592,9 @@ const PostCard = ({ post, currentUser }) => {
         post.movies &&
         post.movies.length > 0 && (
           <div className="pt-2 border-t border-white/5 mt-4">
-            <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-4">
-              🎬 Tagged Media ({post.movies.length}):
+            <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-4 flex items-center gap-1.5">
+              <Clapperboard className="w-3.5 h-3.5 text-gray-600" />
+              Tagged Media ({post.movies.length}):
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {displayMovies.map((mv) => (
@@ -606,6 +627,7 @@ const PostCard = ({ post, currentUser }) => {
 
       {/* CORE INTERACTIONS PANEL */}
       <div className="flex items-center gap-2 pt-2 border-t border-white/5 mt-2">
+        {/* LIKE / VIBES BUTTON */}
         <button
           onClick={handleLike}
           className={`flex-1 py-2.5 rounded-xl border flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider transition-all ${
@@ -614,8 +636,15 @@ const PostCard = ({ post, currentUser }) => {
               : "bg-white/[0.02] border-white/5 text-gray-400 hover:text-white hover:bg-white/5"
           }`}
         >
-          {isLikedByMe ? "❤️" : "🤍"} Vibes ({post.likes?.length || 0})
+          <Heart
+            className={`w-3.5 h-3.5 transition-colors ${
+              isLikedByMe ? "text-rose-500 fill-rose-500" : "text-gray-400"
+            }`}
+          />
+          Vibes ({post.likes?.length || 0})
         </button>
+
+        {/* DISCUSS / COMMENT BUTTON */}
         <button
           onClick={() => setShowComments(!showComments)}
           className={`flex-1 py-2.5 rounded-xl border flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider transition-all ${
@@ -624,7 +653,12 @@ const PostCard = ({ post, currentUser }) => {
               : "bg-white/[0.02] border-white/5 text-gray-400 hover:text-white hover:bg-white/5"
           }`}
         >
-          💬 Discuss ({comments.length})
+          <MessageSquare
+            className={`w-3.5 h-3.5 ${
+              showComments ? "text-blue-400" : "text-gray-400"
+            }`}
+          />
+          Discuss ({comments.length})
         </button>
       </div>
 
@@ -651,8 +685,9 @@ const PostCard = ({ post, currentUser }) => {
           <form onSubmit={handleAddComment} className="space-y-2 relative">
             {selectedCommentMovie && (
               <div className="bg-blue-500/10 border border-blue-500/20 p-2 rounded-xl flex items-center justify-between text-xs">
-                <span className="text-[10px] font-black uppercase tracking-wide text-blue-400">
-                  🍿 Tagged:{" "}
+                <span className="text-[10px] font-black uppercase tracking-wide text-blue-400 flex items-center gap-1">
+                  <Film className="w-3 h-3 text-blue-400" />
+                  Tagged:{" "}
                   {selectedCommentMovie.title || selectedCommentMovie.name}
                 </span>
                 <button
@@ -678,7 +713,7 @@ const PostCard = ({ post, currentUser }) => {
                   type="text"
                   value={commentMovieQuery}
                   onChange={(e) => setCommentMovieQuery(e.target.value)}
-                  placeholder="🎬 Tag film inside comment (optional)..."
+                  placeholder="Tag film inside comment (optional)..." // Tinanggal ang movie emoji para sa premium at malinis na coding look
                   className="w-full bg-white/[0.02] border border-white/5 rounded-xl px-4 py-1.5 text-[10px] focus:outline-none focus:border-blue-500/50 text-gray-400 placeholder-gray-700"
                 />
               </div>
@@ -771,11 +806,21 @@ const PostCard = ({ post, currentUser }) => {
                       : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg"
                   }`}
                 >
+                  {/* DYNAMIC ICON area */}
+                  {isCopying ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : isCopySuccess ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+
+                  {/* DYNAMIC TEXT area */}
                   {isCopying
                     ? "Cloning..."
                     : isCopySuccess
-                      ? "✨ Watchlist Copied!"
-                      : "📂 Copy Watchlist"}
+                      ? "Watchlist Copied!"
+                      : "Copy Watchlist"}
                 </button>
               </div>
             )}
@@ -832,13 +877,15 @@ const Newsfeed = ({ user }) => {
   if (!user) {
     return (
       <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
-        <span className="text-4xl mb-4">🔒</span>
+        <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mb-4 shadow-[0_0_30px_rgba(37,99,235,0.1)]">
+          <Lock className="w-6 h-6 animate-pulse" />
+        </div>
         <h3 className="text-lg font-black uppercase tracking-wider text-white">
           Please Log In First
         </h3>
         <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
-          Kailangan mo munang mag-login gamit ang iyong Google account sa taas
-          para makita ang Timeline at makipag-vibe sa iba!
+          You need to be logged in to view and interact with the Vibe Feed. Join
+          the community and start sharing your movie vibes!
         </p>
       </div>
     );
@@ -981,9 +1028,10 @@ const Newsfeed = ({ user }) => {
 
           <button
             onClick={() => navigate("/manage-posts")}
-            className="h-full sm:h-16 w-full sm:w-auto px-6 bg-white/5 hover:bg-blue-600/10 border border-white/5 hover:border-blue-500/20 rounded-[1.5rem] sm:rounded-[2rem] flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 hover:text-blue-400 transition-all shadow-xl py-4 sm:py-0"
+            className="h-full sm:h-16 w-full sm:w-auto px-6 bg-white/5 hover:bg-blue-600/10 border border-white/5 hover:border-blue-500/20 rounded-[1.5rem] sm:rounded-[2rem] flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 hover:text-blue-400 transition-all shadow-xl py-4 sm:py-0 group"
           >
-            ⚙️ Manage
+            <Settings className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors" />
+            Manage
           </button>
         </div>
 

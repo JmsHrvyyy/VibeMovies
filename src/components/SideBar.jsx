@@ -1,15 +1,40 @@
 import { Link } from "react-router-dom";
 import { logout } from "../services/auth";
+import {
+  Home,
+  Film,
+  Sparkles,
+  FolderHeart,
+  CheckCircle2,
+  User,
+  Settings,
+} from "lucide-react";
 
 const Sidebar = ({ isOpen, setIsOpen, user }) => {
   const menuItems = [
-    { name: "Home", icon: "🏠", path: "/" },
-    { name: "Newsfeed", icon: "📰", path: "/feed" },
-    { name: "Watchlist", icon: "📁", path: "/watchlist" },
-    { name: "Watched Movies", icon: "✅", path: "/watched" },
-    { name: "AI Discover", icon: "🤖", path: "/ai-discover" },
-    { name: "Profile", icon: "👤", path: "/profile" },
-    { name: "Settings", icon: "⚙️", path: "/settings" },
+    { name: "Home", icon: <Home className="w-5 h-5" />, path: "/" },
+    { name: "Newsfeed", icon: <Film className="w-5 h-5" />, path: "/feed" },
+    {
+      name: "AI Discover",
+      icon: <Sparkles className="w-5 h-5 text-blue-400" />,
+      path: "/ai-discover",
+    },
+    {
+      name: "Watchlist",
+      icon: <FolderHeart className="w-5 h-5" />,
+      path: "/watchlist",
+    },
+    {
+      name: "Watched",
+      icon: <CheckCircle2 className="w-5 h-5" />,
+      path: "/watched",
+    },
+    { name: "Profile", icon: <User className="w-5 h-5" />, path: "/profile" },
+    {
+      name: "Settings",
+      icon: <Settings className="w-5 h-5" />,
+      path: "/settings",
+    },
   ];
 
   return (

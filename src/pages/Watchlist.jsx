@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { searchMovies } from "../services/api";
 import MovieCard from "../components/MovieCard";
+import { Lock } from "lucide-react";
 
 const WatchlistPage = ({ user }) => {
   const [watchlists, setWatchlists] = useState([]);
@@ -64,13 +65,15 @@ const WatchlistPage = ({ user }) => {
   if (!user) {
     return (
       <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
-        <span className="text-4xl mb-4">📁</span>
+        <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mb-4 shadow-[0_0_30px_rgba(37,99,235,0.1)]">
+          <Lock className="w-6 h-6 animate-pulse" />
+        </div>
         <h3 className="text-lg font-black uppercase tracking-wider text-white">
-          Please Log In First
+          Please Log In First!
         </h3>
         <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
-          Mag-login muna para makalikha, makapag-save, at makapag-share ng
-          sarili mong mga movie folders at watchlist!
+          You need to be logged in to view and manage your watchlists. Join the
+          community and start creating your personalized movie playlists!
         </p>
       </div>
     );
@@ -166,9 +169,19 @@ const WatchlistPage = ({ user }) => {
       {!selectedList ? (
         <>
           <div className="flex justify-between items-center">
-            <h1 className="text-4xl font-black text-white tracking-tighter uppercase">
-              My Watchlists
-            </h1>
+            <div className="flex items-center gap-4">
+              {/* Neon Blue Accent Pill (Kopya sa design ng Watched Movies) */}
+              <div className="w-2.5 h-10 bg-blue-500 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+
+              <div>
+                <h1 className="text-3xl lg:text-4xl font-black text-white uppercase italic tracking-tighter">
+                  My Watchlists
+                </h1>
+                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-1">
+                  Your Curated Movie Collections & Folders
+                </p>
+              </div>
+            </div>
             <button
               onClick={() => setIsCreating(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg"
