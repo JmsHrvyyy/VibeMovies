@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { Star } from "lucide-react";
 
 const MovieCard = ({ movie, onAddToWatchlist, isWatched }) => {
   const navigate = useNavigate();
@@ -45,8 +46,9 @@ const MovieCard = ({ movie, onAddToWatchlist, isWatched }) => {
           {movie?.title || movie?.name}
         </h3>
         <div className="flex items-center gap-2 mt-1">
-          <span className="text-blue-500 font-black text-[10px]">
-            ⭐ {movie?.vote_average?.toFixed(1)}
+          <span className="text-blue-500 font-black text-[10px] flex items-center gap-1">
+            <Star className="w-3 h-3 text-blue-500 fill-blue-500 stroke-[2.5]" />
+            {movie?.vote_average?.toFixed(1)}
           </span>
           <span className="text-gray-400 font-bold text-[8px] uppercase tracking-widest">
             {movie?.release_date?.split("-")[0]}

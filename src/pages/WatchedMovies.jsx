@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import MovieCard from "../components/MovieCard";
+import { Lock } from "lucide-react";
 
 const WatchedMovies = ({ user }) => {
   const [watchedList, setWatchedList] = useState([]);
@@ -39,13 +40,14 @@ const WatchedMovies = ({ user }) => {
   if (!user) {
     return (
       <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
-        <span className="text-4xl mb-4">✅</span>
+        <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mb-4 shadow-[0_0_30px_rgba(37,99,235,0.1)]">
+          <Lock className="w-6 h-6 animate-pulse" />
+        </div>
         <h3 className="text-lg font-black uppercase tracking-wider text-white">
-          Please Log In First
+          Please Log In First!
         </h3>
         <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
-          Mag-sign in muna para makita ang listahan ng mga pelikulang natapos mo
-          nang mapanood at ma-arkiba ang iyong kasaysayan!
+          You need to be logged in to view your watched movies. Join the community and start building your cinema history!
         </p>
       </div>
     );
@@ -54,10 +56,12 @@ const WatchedMovies = ({ user }) => {
   if (!user) {
   return (
     <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
-      <span className="text-4xl mb-4">✅</span>
+      <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mb-4 shadow-[0_0_30px_rgba(37,99,235,0.1)]">
+        <Lock className="w-6 h-6 animate-pulse" />
+      </div>
       <h3 className="text-lg font-black uppercase tracking-wider text-white">Please Log In First</h3>
       <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
-        Mag-sign in muna para makita ang listahan ng mga pelikulang natapos mo nang mapanood at ma-arkiba ang iyong kasaysayan!
+        You need to be logged in to view your watched movies. Join the community and start building your cinema history!
       </p>
     </div>
   );

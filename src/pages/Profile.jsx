@@ -5,6 +5,7 @@ import { searchMovies } from "../services/api";
 import MovieCard from "../components/MovieCard";
 import ArtistCard from "../components/ArtistCard";
 import { useParams, useNavigate } from "react-router-dom";
+import { Lock, Theater, Users, Flame } from "lucide-react";
 
 const Profile = ({ user }) => {
   const [loading, setLoading] = useState(true);
@@ -125,13 +126,15 @@ const Profile = ({ user }) => {
   if (!user && !uid) {
     return (
       <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
-        <span className="text-4xl mb-4">👤</span>
+        <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mb-4 shadow-[0_0_30px_rgba(37,99,235,0.1)]">
+          <Lock className="w-6 h-6 animate-pulse" />
+        </div>
         <h3 className="text-lg font-black uppercase tracking-wider text-white">
           Please Log In First
         </h3>
         <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
-          Kailangan mong mag-sign in para ma-setup at ma-customize ang sarili
-          mong profile space.
+          You need to be logged in to view and manage your profile. Join the
+          community and start building your cinema history!
         </p>
       </div>
     );
@@ -398,8 +401,8 @@ const Profile = ({ user }) => {
         <div className="bg-[#0f172a] rounded-[2rem] p-8 border border-white/10 shadow-xl flex flex-col">
           <div className="flex justify-between items-center mb-8">
             <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
-              <span className="bg-blue-500/20 p-2 rounded-xl text-blue-500 text-base">
-                🎭
+              <span className="bg-blue-500/20 p-2 rounded-xl text-blue-500 text-base flex items-center justify-center">
+                <Theater className="w-5 h-5 text-blue-500 stroke-[2.5]" />
               </span>
               Favorite Genres
             </h3>
@@ -463,14 +466,11 @@ const Profile = ({ user }) => {
         <div className="bg-[#1a2235] border border-white/5 rounded-[3rem] p-6 md:p-8">
           <div className="flex justify-between items-center mb-8 px-4">
             <div className="flex items-center gap-4">
-              <div className="w-2.5 h-10 bg-red-600 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.6)]" />
-              <h3 className="text-2xl font-black uppercase italic tracking-tighter">
+              <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+                <Users className="w-6 h-6 text-red-500 stroke-[2.5]" />
                 Top 3 Favorite Actors
               </h3>
             </div>
-            <span className="text-[11px] font-black text-gray-500 uppercase tracking-[0.4em]">
-              {profileData.favActors?.length || 0} / 3
-            </span>
           </div>
 
           {/* Grid: Maliit na gap (gap-4) para mas lumaki ang mismong cards */}
@@ -535,8 +535,8 @@ const Profile = ({ user }) => {
       <div className="bg-[#0f172a] rounded-[2rem] p-8 border border-white/10 shadow-xl mt-8">
         <div className="flex justify-between items-center mb-8">
           <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
-            <span className="bg-red-500/20 p-2 rounded-xl text-red-500 text-base">
-              🔥
+            <span className="bg-red-500/20 p-2 rounded-xl text-red-500 text-base flex items-center justify-center">
+              <Flame className="w-5 h-5 text-red-500 stroke-[2.5] fill-red-500/10" />
             </span>
             Top 5 Favorites
           </h3>

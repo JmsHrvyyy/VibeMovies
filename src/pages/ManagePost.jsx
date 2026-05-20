@@ -17,28 +17,46 @@ import {
 import { searchMovies } from "../services/api";
 import { useNavigate } from "react-router-dom";
 import MovieCard from "../components/MovieCard";
+import {
+  FolderHeart,
+  Clapperboard,
+  Heart,
+  MessageSquare,
+  Film,
+  PencilLine,
+  Trash2,
+  AlertTriangle,
+  X,
+  ArrowLeft,
+} from "lucide-react";
 
 // =========================================================
 // MINI SUB-COMPONENT: INLINE MOVIE TAG BADGE FOR DISCUSSIONS
 // =========================================================
 const AttachedMovieBadge = ({ movie }) => {
+  const navigate = useNavigate();
   if (!movie) return null;
   return (
-    <div className="mt-1.5 flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-xl p-1 max-w-xs group shadow-sm">
+    <button
+      type="button"
+      onClick={() => navigate(`/movie/${movie.id}`)} // Dadalhin ang user sa details page ng movie
+      className="mt-1.5 flex items-center gap-2 bg-white/[0.03] hover:bg-blue-600/10 border border-white/5 hover:border-blue-500/30 rounded-xl p-1 max-w-xs group shadow-sm text-left w-full transition-all duration-200"
+    >
       <img
         src={`https://image.tmdb.org/t/p/w92${movie.poster_path}`}
-        className="w-6 h-9 object-cover rounded-lg flex-shrink-0"
+        className="w-6 h-9 object-cover rounded-lg flex-shrink-0 group-hover:scale-105 transition-transform"
         alt=""
       />
-      <div className="min-w-0 flex-1 pr-1">
-        <p className="text-[9px] font-black uppercase tracking-wide text-white truncate">
+      <div className="min-w-0 flex-1 pr-2">
+        <p className="text-[10px] font-black uppercase tracking-wide text-white truncate group-hover:text-blue-400 transition-colors">
           {movie.title}
         </p>
-        <span className="text-[6px] font-black uppercase tracking-widest text-blue-500 bg-blue-500/10 border border-blue-500/20 px-1 py-0.2 rounded mt-0.5 inline-block">
-          🎬 {movie.media_type || "Movie"}
+        <span className="text-[7px] font-black uppercase tracking-widest text-blue-500 bg-blue-500/10 border border-blue-500/20 px-1 py-0.5 rounded mt-0.5 inline-flex items-center gap-1 group-hover:bg-blue-500/20 transition-colors">
+          <Clapperboard className="w-2 h-2 text-blue-500" />
+          {movie.media_type || "Movie"}
         </span>
       </div>
-    </div>
+    </button>
   );
 };
 
@@ -197,15 +215,19 @@ const ManagedCommentItem = ({ postId, comment, currentUser }) => {
       <div className="flex items-center gap-3 pl-8 text-[8px] font-black uppercase tracking-wider text-gray-500">
         <button
           onClick={handleCommentLikeToggle}
-          className={`hover:text-white transition-colors flex items-center gap-0.5 ${isCommentLikedByMe ? "text-blue-400" : ""}`}
+          className={`hover:text-white transition-colors flex items-center gap-1 ${isCommentLikedByMe ? "text-blue-400" : ""}`}
         >
-          {isCommentLikedByMe ? "❤️ Liked" : "🤍 Like"} ({commentLikes.length})
+          <Heart
+            className={`w-2.5 h-2.5 ${isCommentLikedByMe ? "text-blue-400 fill-blue-400" : "text-gray-500"}`}
+          />
+          {isCommentLikedByMe ? "Liked" : "Like"} ({commentLikes.length})
         </button>
         <button
           onClick={() => setShowReplies(!showReplies)}
-          className="hover:text-white transition-colors"
+          className="hover:text-white transition-colors flex items-center gap-1"
         >
-          💬 Reply {replyCount > 0 && `(${replyCount})`}
+          <MessageSquare className="w-2.5 h-2.5 text-gray-500" />
+          Reply {replyCount > 0 && `(${replyCount})`}
         </button>
       </div>
 
@@ -234,13 +256,14 @@ const ManagedCommentItem = ({ postId, comment, currentUser }) => {
           <form onSubmit={handleAddReply} className="space-y-1 relative">
             {replyMovie && (
               <div className="flex items-center gap-1.5 bg-blue-600/10 border border-blue-500/20 px-2 py-0.5 rounded-lg w-fit text-[8px] text-blue-400 font-bold">
-                🎬 {replyMovie.title || replyMovie.name}{" "}
+                <Film className="w-2.5 h-2.5 text-blue-400" />
+                {replyMovie.title || replyMovie.name}
                 <button
                   type="button"
                   onClick={() => setReplyMovie(null)}
-                  className="text-red-500 pl-1"
+                  className="text-red-500 pl-1 hover:text-red-400 transition-colors flex items-center"
                 >
-                  ✕
+                  <X className="w-2.5 h-2.5" />
                 </button>
               </div>
             )}
@@ -257,8 +280,8 @@ const ManagedCommentItem = ({ postId, comment, currentUser }) => {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="🎬 Film..."
-                  className="w-16 bg-white/5 border border-white/5 rounded px-1 text-[7px] text-right"
+                  placeholder="Film..." // Malinis na plain text placeholder para sa minimalist tech vibe
+                  className="w-16 bg-white/5 border border-white/5 rounded px-1 text-[7px] text-right focus:outline-none focus:border-blue-500/30 transition-all text-gray-300 placeholder-gray-600"
                 />
                 {searchResults.length > 0 && (
                   <div className="absolute left-0 right-0 bottom-full mb-1 bg-[#141f35] border border-white/10 rounded-xl max-h-24 overflow-y-auto z-50 p-1 space-y-0.5 no-scrollbar">
@@ -407,14 +430,16 @@ const ManagedPostCard = ({
       {/* DYNAMIC ATTACHMENTS FOR FOLDER OR MEDIA */}
       {post.postType === "watchlist" ? (
         <div className="pt-2 border-t border-white/5 mt-2">
-          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-2">
-            📂 Shared Watchlist Folder:
+          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+            <FolderHeart className="w-3 h-3 text-blue-500" />
+            Shared Watchlist Folder:
           </p>
           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 inline-block max-w-xs">
-            <h4 className="text-xs font-black uppercase tracking-wide text-white truncate">
-              📁 {post.watchListName}
+            <h4 className="text-xs font-black uppercase tracking-wide text-white truncate flex items-center gap-1.5">
+              <FolderHeart className="w-3.5 h-3.5 text-gray-400" />
+              {post.watchListName}
             </h4>
-            <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">
+            <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest mt-0.5 pl-5">
               {post.watchlistMovies?.length || 0} films enclosed
             </p>
           </div>
@@ -423,8 +448,9 @@ const ManagedPostCard = ({
         post.movies &&
         post.movies.length > 0 && (
           <div className="pt-2 border-t border-white/5 mt-2">
-            <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-3">
-              🎬 Tagged Media ({post.movies.length}):
+            <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+              <Clapperboard className="w-3.5 h-3.5 text-gray-600" />
+              Tagged Media ({post.movies.length}):
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {post.movies.map((mv) => (
@@ -439,10 +465,13 @@ const ManagedPostCard = ({
                 />
               ))}
             </div>
-            <div className="flex items-center justify-end text-[9px] font-black uppercase tracking-widest text-gray-500 italic pt-1">
+            <div className="flex items-center justify-end text-[9px] font-black uppercase tracking-widest text-gray-500 italic pt-1 gap-1">
+              <Heart
+                className={`w-3 h-3 ${post.likes && post.likes.length > 0 ? "text-rose-500 fill-rose-500" : "text-gray-500"}`}
+              />
               {post.likes && post.likes.length > 0
-                ? `❤️ ${post.likes.length} ${post.likes.length === 1 ? "Vibe" : "Vibes"} received`
-                : "🤍 No vibes received yet"}
+                ? `${post.likes.length} ${post.likes.length === 1 ? "Vibe" : "Vibes"} received`
+                : "No vibes received yet"}
             </div>
           </div>
         )
@@ -451,22 +480,26 @@ const ManagedPostCard = ({
       <div className="flex items-center gap-2 pt-2 border-t border-white/5">
         <button
           onClick={handleLikeToggle}
-          className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${isLikedByMe ? "bg-blue-600/20 border border-blue-500/40 text-blue-400" : "bg-white/5 border border-white/5 text-gray-400 hover:text-white"}`}
+          className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${isLikedByMe ? "bg-blue-600/20 border border-blue-500/40 text-blue-400" : "bg-white/5 border border-white/5 text-gray-400 hover:text-white"}`}
         >
-          {isLikedByMe ? "❤️ Liked" : "🤍 Like"}
+          <Heart
+            className={`w-3 h-3 ${isLikedByMe ? "text-blue-400 fill-blue-400" : "text-gray-400"}`}
+          />
+          {isLikedByMe ? "Liked" : "Like"}
         </button>
         <button
           onClick={() => setShowComments(!showComments)}
           className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${showComments ? "bg-white/10 border border-white/20 text-white" : "bg-white/5 border border-white/5 text-gray-400 hover:text-white"}`}
         >
-          <span>💬 Comment</span>
+          <MessageSquare className="w-3 h-3" />
+          <span>Comment</span>
           {commentCount > 0 && (
             <span className="bg-white/10 text-white font-bold text-[8px] px-1 py-0.5 rounded">
               {commentCount}
             </span>
           )}
         </button>
-        <div className="flex-1 text-right text-[9px] font-black uppercase tracking-wider text-gray-500 italic space-x-1.5">
+        <div className="flex-1 text-right text-[9px] font-black uppercase tracking-wider text-gray-500 italic space-x-1.5 flex items-center justify-end gap-1">
           <span>
             {likeCount === 0
               ? "No vibes"
@@ -506,13 +539,14 @@ const ManagedPostCard = ({
           <form onSubmit={handleAddComment} className="space-y-2 relative">
             {commentMovie && (
               <div className="flex items-center gap-1.5 bg-blue-600/10 border border-blue-500/20 px-2 py-0.5 rounded-lg w-fit text-[9px] text-blue-400 font-bold">
-                🎬 {commentMovie.title || commentMovie.name}{" "}
+                <Film className="w-2.5 h-2.5 text-blue-400" />
+                {commentMovie.title || commentMovie.name}
                 <button
                   type="button"
                   onClick={() => setCommentMovie(null)}
-                  className="text-red-500 pl-1"
+                  className="text-red-500 pl-1 hover:text-red-400 transition-colors flex items-center"
                 >
-                  ✕
+                  <X className="w-2.5 h-2.5" />
                 </button>
               </div>
             )}
@@ -529,8 +563,8 @@ const ManagedPostCard = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="🎬 Search..."
-                  className="w-20 bg-white/5 border border-white/5 rounded-xl px-2 py-1 text-[9px] text-right"
+                  placeholder="Search film..." // Cleaned placeholder string
+                  className="w-24 bg-white/5 border border-white/5 rounded-xl px-2 py-1 text-[9px] text-right focus:outline-none focus:border-blue-500/30 transition-all"
                 />
                 {searchResults.length > 0 && (
                   <div className="absolute left-0 right-0 bottom-full mb-1 bg-[#141f35] border border-white/10 rounded-xl max-h-32 overflow-y-auto z-50 p-1 space-y-0.5 no-scrollbar">
@@ -554,7 +588,7 @@ const ManagedPostCard = ({
               <button
                 type="submit"
                 disabled={!commentText.trim() && !commentMovie}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-white/5 text-white disabled:text-gray-600 rounded-2xl text-[9px] font-black uppercase tracking-wider transition-all"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-[#121a2e] disabled:border disabled:border-white/5 text-white disabled:text-gray-600 rounded-2xl text-[9px] font-black uppercase tracking-wider transition-all"
               >
                 Send
               </button>
@@ -566,15 +600,17 @@ const ManagedPostCard = ({
       <div className="flex items-center gap-2 pt-3 border-t border-white/5 mt-2">
         <button
           onClick={() => onEditTrigger(post)}
-          className="flex-1 py-2.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 text-yellow-500 font-black uppercase tracking-widest text-[10px] rounded-xl transition-all"
+          className="flex-1 py-2.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 text-yellow-500 font-black uppercase tracking-widest text-[10px] rounded-xl transition-all flex items-center justify-center gap-1.5"
         >
-          ✏️ Edit Text
+          <PencilLine className="w-3.5 h-3.5" />
+          Edit Text
         </button>
         <button
           onClick={() => onDeleteTrigger(post.id)}
-          className="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 font-black uppercase tracking-widest text-[10px] rounded-xl transition-all"
+          className="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 font-black uppercase tracking-widest text-[10px] rounded-xl transition-all flex items-center justify-center gap-1.5"
         >
-          🗑️ Delete Post
+          <Trash2 className="w-3.5 h-3.5" />
+          Delete Post
         </button>
       </div>
     </div>
@@ -654,9 +690,9 @@ const ManagePost = ({ user }) => {
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate("/feed")}
-              className="bg-white/5 hover:bg-white/10 p-3 rounded-full text-xs font-black uppercase tracking-wider transition-all"
+              className="bg-white/5 hover:bg-white/10 p-3 rounded-full text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center"
             >
-              ⬅ Back
+              <ArrowLeft className="w-4 h-4 text-gray-300" />
             </button>
             <div>
               <h1 className="text-2xl font-black uppercase italic tracking-tighter">
@@ -705,9 +741,9 @@ const ManagePost = ({ user }) => {
               </h3>
               <button
                 onClick={() => setEditingPost(null)}
-                className="text-gray-500 hover:text-white font-bold text-sm bg-white/5 w-8 h-8 rounded-full flex items-center justify-center"
+                className="text-gray-500 hover:text-white font-bold bg-white/5 w-8 h-8 rounded-full flex items-center justify-center transition-all hover:bg-white/10"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleUpdate} className="space-y-4">
@@ -731,8 +767,8 @@ const ManagePost = ({ user }) => {
       {postToDelete && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-[#0e1626] border border-white/10 w-full max-w-sm rounded-[2.5rem] p-6 text-center space-y-6 shadow-2xl">
-            <div className="w-16 h-16 bg-red-600/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center text-2xl mx-auto shadow-inner">
-              ⚠️
+            <div className="w-16 h-16 bg-red-600/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto shadow-inner shadow-red-900/10">
+              <AlertTriangle className="w-7 h-7 stroke-[2.5]" />
             </div>
             <div className="space-y-2">
               <h3 className="text-sm font-black uppercase italic tracking-wider text-white">

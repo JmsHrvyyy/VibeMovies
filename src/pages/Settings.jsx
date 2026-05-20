@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
 import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
+import { Lock, Settings as SettingsIcon, AlertOctagon } from "lucide-react";
 
 const Settings = ({ user }) => {
   const [nickname, setNickname] = useState("");
@@ -36,7 +37,7 @@ const Settings = ({ user }) => {
 
     try {
       const docRef = doc(db, "users", user.uid);
-      await updateDoc(docRef, {
+      await updateDoc(docRef, { 
         displayName: nickname.trim(),
       });
 
@@ -89,8 +90,16 @@ const Settings = ({ user }) => {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#080d17] flex items-center justify-center text-gray-400 text-sm">
-        Please log in to view settings.
+      <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
+        <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mb-4 shadow-[0_0_30px_rgba(37,99,235,0.1)]">
+          <Lock className="w-6 h-6 animate-pulse" />
+        </div>
+        <h3 className="text-lg font-black uppercase tracking-wider text-white">
+          Please Log In First
+        </h3>
+        <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
+          You need to be logged in to view and manage your settings.
+        </p>
       </div>
     );
   }
@@ -99,8 +108,9 @@ const Settings = ({ user }) => {
     <div className="min-h-screen bg-[#080d17] text-white p-6 md:p-12 max-w-2xl">
       {/* HEADER */}
       <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-black uppercase tracking-wider text-white">
-          ⚙️ App Settings
+        <h1 className="text-2xl md:text-3xl font-black uppercase tracking-wider text-white flex items-center gap-3">
+          <SettingsIcon className="w-7 h-7 md:w-8 md:h-8 text-gray-400 stroke-[2.5]" />
+          App Settings
         </h1>
         <p className="text-xs text-gray-500 mt-1">
           Manage your identity and configuration on Movie Vibe.
@@ -163,8 +173,9 @@ const Settings = ({ user }) => {
         {/* CARD 2: DANGER ZONE (DEACTIVATE) */}
         <div className="bg-[#0d1527] border border-red-500/10 rounded-[2rem] p-6 md:p-8 shadow-xl space-y-4">
           <div>
-            <h2 className="text-md font-bold text-red-400 uppercase tracking-wide mb-1">
-              🚨 Danger Zone
+            <h2 className="text-md font-bold text-red-400 uppercase tracking-wide mb-1 flex items-center gap-2">
+              <AlertOctagon className="w-4 h-4 text-red-400 stroke-[2.5] animate-pulse" />
+              Danger Zone
             </h2>
             <p className="text-xs text-gray-400">
               Actions here are irreversible. Be extremely careful.
