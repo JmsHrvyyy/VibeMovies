@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import {
   collection,
   onSnapshot,
@@ -29,6 +29,39 @@ import {
   X,
   ArrowLeft,
 } from "lucide-react";
+
+import { getDoc } from "firebase/firestore"; // Siguraduhing may getDoc ka sa imports sa taas
+
+const UsernameDisplay = ({ userId, fallbackName, className }) => {
+  const [displayName, setDisplayName] = useState(fallbackName || "Anonymous");
+  const navigate = useNavigate(); // <-- Tawagin si navigate sa loob
+
+  useEffect(() => {
+    if (!userId) return;
+    const fetchLatestName = async () => {
+      try {
+        const userDocRef = doc(db, "users", userId);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists() && userDocSnap.data().displayName) {
+          setDisplayName(userDocSnap.data().displayName);
+        }
+      } catch (err) {
+        console.error("Error fetching live nickname:", err);
+      }
+    };
+    fetchLatestName();
+  }, [userId, fallbackName]);
+
+  return (
+    <button
+      onClick={() => navigate(`/profile/${userId}`)} // <-- Dadalhin sa profile kapag clinick
+      className={`${className} hover:underline text-left cursor-pointer`}
+      type="button"
+    >
+      {displayName}
+    </button>
+  );
+};
 
 // =========================================================
 // MINI SUB-COMPONENT: INLINE MOVIE TAG BADGE FOR DISCUSSIONS
@@ -63,7 +96,7 @@ const AttachedMovieBadge = ({ movie }) => {
 // =========================================================
 // SUB-COMPONENT: INDIVIDUAL MANAGED COMMENT ITEM WITH ACTIONS
 // =========================================================
-const ManagedCommentItem = ({ postId, comment, currentUser }) => {
+const ManagedCommentItem = ({ postId, comment, currentUser, post }) => {
   const [showReplies, setShowReplies] = useState(false);
   const [replies, setReplies] = useState([]);
   const [replyText, setReplyText] = useState("");
@@ -176,38 +209,113 @@ const ManagedCommentItem = ({ postId, comment, currentUser }) => {
     }
   };
 
+  const handleDeleteComment = async () => {
+    if (
+      !window.confirm("Sigurado ka bang gusto mong burahin ang komentong ito?")
+    )
+      return;
+
+    try {
+      // Gagamitin ang post.id at comment.id na hawak ng props ng component na ito
+      const commentDocRef = doc(db, "posts", post.id, "comments", comment.id);
+      await deleteDoc(commentDocRef);
+    } catch (err) {
+      console.error("Error deleting comment:", err);
+      alert("Hindi nabura ang komento.");
+    }
+  };
+
+  const handleDeleteReply = async (replyId) => {
+    if (
+      !window.confirm("Sigurado ka bang gusto mong burahin ang reply na ito?")
+    )
+      return;
+
+    try {
+      const replyRef = doc(
+        db,
+        "posts",
+        post.id, // Siguraduhing naipasa ang buong post prop gaya ng inayos natin kanina
+        "comments",
+        comment.id,
+        "replies",
+        replyId,
+      );
+      await deleteDoc(replyRef);
+    } catch (err) {
+      console.error("Error deleting reply:", err);
+      alert("Hindi nabura ang reply.");
+    }
+  };
+
   return (
     <div className="bg-white/[0.01] border border-white/[0.02] p-3 rounded-2xl space-y-1.5">
       <div className="flex gap-3 items-start">
-        {comment.userPhoto ? (
-          <img
-            src={comment.userPhoto}
-            className="w-5 h-5 rounded-full object-cover border border-white/10 flex-shrink-0"
-            alt=""
-          />
-        ) : (
-          <div className="w-5 h-5 rounded-full bg-blue-600/20 flex items-center justify-center font-black text-[8px] text-blue-400 flex-shrink-0">
-            {comment.userName?.[0]?.toUpperCase()}
-          </div>
-        )}
+        {/* AVATAR SECTION (KALIWA) */}
+        <button
+          type="button"
+          onClick={() => navigate(`/profile/${comment.userId}`)}
+          className="flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
+          title={`View ${comment.userName}'s profile`}
+        >
+          {comment.userPhoto ? (
+            <img
+              src={comment.userPhoto}
+              className="w-5 h-5 rounded-full object-cover"
+              alt=""
+            />
+          ) : (
+            <div className="w-5 h-5 rounded-full bg-blue-600/20 flex items-center justify-center text-[9px] font-black text-blue-400">
+              {comment.userName?.[0]?.toUpperCase()}
+            </div>
+          )}
+        </button>
+
+        {/* CONTENT BLOCK (KANAN) */}
         <div className="flex-1 space-y-0.5 min-w-0">
+          {/* HEADER ROW: Name sa kaliwa, Date + Trash sa kanan */}
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-black text-white uppercase tracking-wide truncate pr-2">
-              {comment.userName}
+              <UsernameDisplay
+                userId={post.userId}
+                fallbackName={post.userName}
+                className="text-sm font-black text-white uppercase tracking-wide"
+              />
             </span>
-            <span className="text-[7px] font-bold text-gray-600 uppercase tracking-tight">
-              {comment.createdAt
-                ? new Date(
-                    comment.createdAt.seconds * 1000,
-                  ).toLocaleDateString()
-                : "Now"}
-            </span>
+
+            {/* KANANG BAHAGI NG HEADER: Date at Moderation Trash Icon */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="text-[7px] font-bold text-gray-600 uppercase tracking-tight">
+                {comment.createdAt
+                  ? new Date(
+                      comment.createdAt.seconds * 1000,
+                    ).toLocaleDateString()
+                  : "Now"}
+              </span>
+
+              {/* TRASH ICON FOR MODERATION PRIVILEGES */}
+              {(currentUser?.uid === comment.userId ||
+                currentUser?.uid === comment.postOwnerId ||
+                currentUser?.uid === auth.currentUser?.uid) && (
+                <button
+                  onClick={handleDeleteComment}
+                  className="text-gray-600 hover:text-red-500 transition-colors p-0.5"
+                  title="Delete Comment"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* COMMENT TEXT */}
           {comment.text && (
             <p className="text-gray-300 text-xs font-normal leading-normal break-words">
               {comment.text}
             </p>
           )}
+
+          {/* ATTACHED MOVIE BADGE */}
           <AttachedMovieBadge movie={comment.movie} />
         </div>
       </div>
@@ -237,18 +345,68 @@ const ManagedCommentItem = ({ postId, comment, currentUser }) => {
             {replies.map((reply) => (
               <div
                 key={reply.id}
-                className="flex gap-2 bg-white/[0.005] p-2 rounded-xl items-start"
+                className="flex gap-2 bg-white/[0.005] p-2 rounded-xl items-start justify-between"
               >
-                <div className="flex-1 min-w-0">
-                  <span className="text-[8px] font-black text-white uppercase tracking-wide">
-                    {reply.userName}
+                {/* KALIWANG BAHAGI: Avatar + Text Info Layout */}
+                <div className="flex gap-2 items-start flex-1 min-w-0">
+                  {/* PROFILE PICTURE / AVATAR */}
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/profile/${reply.userId}`)}
+                    className="flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
+                    title={`View ${reply.userName}'s profile`}
+                  >
+                    {reply.userPhoto ? (
+                      <img
+                        src={reply.userPhoto}
+                        className="w-4 h-4 rounded-full object-cover"
+                        alt=""
+                      />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full bg-gray-700 flex items-center justify-center text-[8px] font-bold text-gray-300">
+                        {reply.userName?.[0]?.toUpperCase()}
+                      </div>
+                    )}
+                  </button>
+
+                  {/* USERNAME & REPLY CONTENT */}
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[8px] font-black text-white uppercase tracking-wide block">
+                      <UsernameDisplay
+                        userId={post.userId}
+                        fallbackName={post.userName}
+                        className="text-sm font-black text-white uppercase tracking-wide"
+                      />
+                    </span>
+                    {reply.text && (
+                      <p className="text-gray-400 text-xs font-normal break-words leading-normal">
+                        {reply.text}
+                      </p>
+                    )}
+                    <AttachedMovieBadge movie={reply.movie} />
+                  </div>
+                </div>
+
+                {/* KANANG BAHAGI: Mini Date stamp at Delete button */}
+                <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5 pl-2">
+                  <span className="text-[7px] font-bold text-gray-600 uppercase tracking-tight">
+                    {reply.createdAt
+                      ? new Date(
+                          reply.createdAt.seconds * 1000,
+                        ).toLocaleDateString()
+                      : "Now"}
                   </span>
-                  {reply.text && (
-                    <p className="text-gray-400 text-xs font-normal break-words">
-                      {reply.text}
-                    </p>
+
+                  {(currentUser?.uid === reply.userId ||
+                    currentUser?.uid === post.userId) && (
+                    <button
+                      onClick={() => handleDeleteReply(reply.id)}
+                      className="text-gray-600 hover:text-red-500 transition-colors p-0.5"
+                      title="Delete Reply"
+                    >
+                      <Trash2 className="w-2.5 h-2.5" />
+                    </button>
                   )}
-                  <AttachedMovieBadge movie={reply.movie} />
                 </div>
               </div>
             ))}
@@ -530,6 +688,7 @@ const ManagedPostCard = ({
                 <ManagedCommentItem
                   key={comment.id}
                   postId={post.id}
+                  post={post} // <-- IDAGDAG ITONG LINYA NA ITO DITO!
                   comment={comment}
                   currentUser={currentUser}
                 />
