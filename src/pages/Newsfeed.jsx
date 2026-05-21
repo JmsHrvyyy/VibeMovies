@@ -11,6 +11,8 @@ import {
   updateDoc,
   arrayUnion,
   arrayRemove,
+  deleteDoc,
+  getDoc,
 } from "firebase/firestore";
 import { searchMovies } from "../services/api";
 import MovieCard from "../components/MovieCard";
@@ -26,7 +28,45 @@ import {
   Check,
   Loader2,
   Film,
+  Trash2,
 } from "lucide-react";
+
+// =========================================================
+// MICRO COMPONENT: LIVE CUSTOM NICKNAME DISPLAY (NASA LABAS)
+// =========================================================
+const UsernameDisplay = ({ userId, fallbackName, className }) => {
+  const [displayName, setDisplayName] = useState(fallbackName || "Anonymous");
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!userId) return;
+    const fetchLatestName = async () => {
+      try {
+        const userDocRef = doc(db, "users", userId);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists() && userDocSnap.data().displayName) {
+          setDisplayName(userDocSnap.data().displayName);
+        }
+      } catch (err) {
+        console.error("Error fetching live nickname:", err);
+      }
+    };
+    fetchLatestName();
+  }, [userId, fallbackName]);
+
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation(); // Iwasan ang pag-trigger ng click ng parent profile card
+        navigate(`/profile/${userId}`);
+      }}
+      className={`${className} hover:underline text-left cursor-pointer`}
+      type="button"
+    >
+      {displayName}
+    </button>
+  );
+};
 
 // =========================================================
 // MINI SUB-COMPONENT: INLINE MOVIE TAG BADGE (CLICKABLE FOR DETAILS)
@@ -62,9 +102,8 @@ const AttachedMovieBadge = ({ movie }) => {
 // =========================================================
 // SUB-COMPONENT: INDIVIDUAL COMMENT BLOCK WITH LIKES AND REPLIES
 // =========================================================
-const CommentBlock = ({ post, comment, currentUser, postId, user }) => {
-  const [comments, setComments] = useState([]);
-  const [newComment, setNewComment] = useState("");
+const CommentBlock = ({ post, comment, currentUser }) => {
+  const navigate = useNavigate();
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [replies, setReplies] = useState([]);
@@ -184,185 +223,293 @@ const CommentBlock = ({ post, comment, currentUser, postId, user }) => {
     }
   };
 
+  const handleDeleteComment = async () => {
+    if (
+      !window.confirm("Sigurado ka bang gusto mong burahin ang komentong ito?")
+    )
+      return;
+
+    try {
+      const commentDocRef = doc(db, "posts", post.id, "comments", comment.id);
+      await deleteDoc(commentDocRef);
+    } catch (err) {
+      console.error("Error deleting comment:", err);
+      alert("Hindi nabura ang komento.");
+    }
+  };
+
+  const handleDeleteReply = async (replyId) => {
+    if (
+      !window.confirm("Sigurado ka bang gusto mong burahin ang reply na ito?")
+    )
+      return;
+
+    try {
+      const replyRef = doc(
+        db,
+        "posts",
+        post.id,
+        "comments",
+        comment.id,
+        "replies",
+        replyId,
+      );
+      await deleteDoc(replyRef);
+    } catch (err) {
+      console.error("Error deleting reply:", err);
+      alert("Hindi nabura ang reply.");
+    }
+  };
+
   const isCommentLikedByMe = comment.likes?.includes(currentUser?.uid);
-  if (!user) {
-    return (
-      <div className="bg-white/[0.02] border border-white/5 p-3 rounded-2xl space-y-2">
+
+  return (
+    <div className="bg-white/[0.02] border border-white/5 p-3 rounded-2xl space-y-2">
+      <div className="flex items-center justify-between w-full">
+        {/* KALIWANG BAHAGI: Avatar at Pangalan */}
         <div className="flex items-center gap-2">
-          {comment.userPhoto ? (
-            <img
-              src={comment.userPhoto}
-              className="w-5 h-5 rounded-full object-cover"
-              alt=""
-            />
-          ) : (
-            <div className="w-5 h-5 rounded-full bg-blue-600/20 flex items-center justify-center text-[9px] font-black text-blue-400">
-              {comment.userName?.[0]?.toUpperCase()}
-            </div>
-          )}
-          <span className="text-[10px] font-black uppercase tracking-wide text-gray-200">
-            {comment.userName}
-          </span>
-        </div>
-
-        <div className="pl-7">
-          {comment.text && (
-            <p className="text-xs text-gray-400 font-medium">{comment.text}</p>
-          )}
-          {comment.movie && <AttachedMovieBadge movie={comment.movie} />}
-        </div>
-
-        <div className="pl-7 flex items-center gap-4 text-[9px] font-black uppercase tracking-wider text-gray-500 pt-0.5">
           <button
-            onClick={handleCommentLike}
-            className={`hover:text-white transition-colors flex items-center gap-1 ${isCommentLikedByMe ? "text-rose-500 hover:text-rose-400" : ""}`}
+            type="button"
+            onClick={() => navigate(`/profile/${comment.userId}`)}
+            className="flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
+            title={`View profile`}
           >
-            <Heart
-              className={`w-2.5 h-2.5 ${isCommentLikedByMe ? "text-rose-500 fill-rose-500" : "text-gray-500"}`}
-            />
-            {isCommentLikedByMe ? "Liked" : "Vibe"} (
-            {comment.likes?.length || 0})
-          </button>
-          <button
-            onClick={() => setShowReplyForm(!showReplyForm)}
-            className="hover:text-blue-400 transition-colors flex items-center gap-1"
-          >
-            <MessageSquare className="w-2.5 h-2.5 text-gray-500" />
-            Reply ({replies.length})
-          </button>
-        </div>
-
-        {replies.length > 0 && (
-          <div className="pl-7 pt-2 space-y-3 border-l border-white/5 ml-3 mt-1">
-            {replies.map((reply) => {
-              const isReplyLikedByMe = reply.likes?.includes(currentUser?.uid);
-              return (
-                <div
-                  key={reply.id}
-                  className="bg-white/[0.01] p-2.5 rounded-xl border border-white/[0.02] space-y-1.5"
-                >
-                  <div className="flex items-center gap-1.5">
-                    {reply.userPhoto ? (
-                      <img
-                        src={reply.userPhoto}
-                        className="w-4 h-4 rounded-full object-cover"
-                        alt=""
-                      />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full bg-gray-700 flex items-center justify-center text-[8px] font-bold text-gray-300">
-                        {reply.userName?.[0]?.toUpperCase()}
-                      </div>
-                    )}
-                    <span className="text-[9px] font-black uppercase text-gray-400">
-                      {reply.userName}
-                    </span>
-                  </div>
-
-                  <div className="pl-5">
-                    {reply.text && (
-                      <p className="text-[11px] text-gray-300 font-medium">
-                        {reply.text}
-                      </p>
-                    )}
-                    {reply.movie && <AttachedMovieBadge movie={reply.movie} />}
-                  </div>
-
-                  <div className="pl-5 pt-0.5">
-                    <button
-                      onClick={() => handleReplyLike(reply.id, reply.likes)}
-                      className={`text-[8px] font-black uppercase tracking-widest transition-colors ${
-                        isReplyLikedByMe
-                          ? "text-rose-500 hover:text-rose-400"
-                          : "text-gray-600 hover:text-gray-400"
-                      }`}
-                    >
-                      {isReplyLikedByMe ? "❤️ Liked" : "🤍 Vibe"} (
-                      {reply.likes?.length || 0})
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {showReplyForm && (
-          <form
-            onSubmit={handleAddReply}
-            className="pl-7 pt-2 space-y-2 relative animate-in slide-in-from-top-1 duration-150"
-          >
-            {selectedReplyMovie && (
-              <div className="bg-blue-500/10 border border-blue-500/20 p-1.5 rounded-xl flex items-center justify-between text-[10px]">
-                <span className="font-black uppercase tracking-wide text-blue-400">
-                  🍿 Tagged in Reply:{" "}
-                  {selectedReplyMovie.title || selectedReplyMovie.name}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedReplyMovie(null)}
-                  className="text-gray-400 hover:text-white text-[9px]"
-                >
-                  ✕
-                </button>
+            {comment.userPhoto ? (
+              <img
+                src={comment.userPhoto}
+                className="w-5 h-5 rounded-full object-cover"
+                alt=""
+              />
+            ) : (
+              <div className="w-5 h-5 rounded-full bg-blue-600/20 flex items-center justify-center text-[9px] font-black text-blue-400">
+                {comment.userName?.[0]?.toUpperCase()}
               </div>
             )}
+          </button>
 
-            <div className="flex gap-2 items-start">
-              <div className="flex-1 flex flex-col gap-1">
-                <input
-                  type="text"
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="Write a reply..."
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[11px] focus:outline-none focus:border-blue-500 text-gray-300 placeholder-gray-600"
-                  autoFocus
-                />
-                <input
-                  type="text"
-                  value={replyMovieQuery}
-                  onChange={(e) => setReplyMovieQuery(e.target.value)}
-                  placeholder="Tag film inside reply (optional)..." // Tinanggal ang emoji para maging minimalist at malinis
-                  className="w-full bg-white/[0.01] border border-white/5 rounded-lg px-3 py-1 text-[9px] focus:outline-none focus:border-blue-500/40 text-gray-500 placeholder-gray-700"
-                />
-              </div>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shadow-md mt-0.5"
+          <UsernameDisplay
+            userId={comment.userId}
+            fallbackName={comment.userName}
+            className="text-[10px] font-black uppercase tracking-wide text-gray-200"
+          />
+        </div>
+
+        {/* KANANG BAHAGI: Date Tag at Trash Icon */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-[7px] font-bold text-gray-600 uppercase tracking-tight">
+            {comment.createdAt
+              ? new Date(comment.createdAt.seconds * 1000).toLocaleDateString()
+              : "Now"}
+          </span>
+
+          {(currentUser?.uid === comment.userId ||
+            currentUser?.uid === post.userId) && (
+            <button
+              onClick={handleDeleteComment}
+              className="text-gray-600 hover:text-red-500 transition-colors p-1"
+              title="Delete Comment"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="pl-7">
+        {comment.text && (
+          <p className="text-xs text-gray-400 font-medium">{comment.text}</p>
+        )}
+        {comment.movie && <AttachedMovieBadge movie={comment.movie} />}
+      </div>
+
+      <div className="pl-7 flex items-center gap-4 text-[9px] font-black uppercase tracking-wider text-gray-500 pt-0.5">
+        <button
+          onClick={handleCommentLike}
+          className={`hover:text-white transition-colors flex items-center gap-1 ${isCommentLikedByMe ? "text-rose-500 hover:text-rose-400" : ""}`}
+        >
+          <Heart
+            className={`w-2.5 h-2.5 ${isCommentLikedByMe ? "text-rose-500 fill-rose-500" : "text-gray-500"}`}
+          />
+          {isCommentLikedByMe ? "Liked" : "Vibe"} ({comment.likes?.length || 0})
+        </button>
+        <button
+          onClick={() => setShowReplyForm(!showReplyForm)}
+          className="hover:text-blue-400 transition-colors flex items-center gap-1"
+        >
+          <MessageSquare className="w-2.5 h-2.5 text-gray-500" />
+          Reply ({replies.length})
+        </button>
+      </div>
+
+      {replies.length > 0 && (
+        <div className="pl-7 pt-2 space-y-3 border-l border-white/5 ml-3 mt-1">
+          {replies.map((reply) => {
+            const isReplyLikedByMe = reply.likes?.includes(currentUser?.uid);
+            return (
+              <div
+                key={reply.id}
+                className="bg-white/[0.01] p-2.5 rounded-xl border border-white/[0.02] space-y-1.5"
               >
-                Reply
-              </button>
-            </div>
+                {/* REPLY HEADER: Name sa kaliwa, Date sa kanan */}
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/profile/${reply.userId}`)}
+                      className="flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
+                      title={`View profile`}
+                    >
+                      {reply.userPhoto ? (
+                        <img
+                          src={reply.userPhoto}
+                          className="w-4 h-4 rounded-full object-cover"
+                          alt=""
+                        />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full bg-gray-700 flex items-center justify-center text-[8px] font-bold text-gray-300">
+                          {reply.userName?.[0]?.toUpperCase()}
+                        </div>
+                      )}
+                    </button>
 
-            {replyMovieResults.length > 0 && (
-              <div className="absolute left-0 right-0 bottom-full mb-1 bg-[#121929] border border-white/10 rounded-xl max-h-32 overflow-y-auto z-[60] p-1.5 space-y-0.5 no-scrollbar shadow-2xl">
-                {replyMovieResults.map((mv) => (
-                  <button
-                    key={mv.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedReplyMovie(mv);
-                      setReplyMovieResults([]);
-                      setReplyMovieQuery("");
-                    }}
-                    className="w-full flex items-center gap-2 p-1 hover:bg-white/5 rounded-lg text-left transition-all group"
-                  >
-                    <img
-                      src={`https://image.tmdb.org/t/p/w92${mv.poster_path}`}
-                      className="w-4 h-6 object-cover rounded"
-                      alt=""
+                    <UsernameDisplay
+                      userId={reply.userId}
+                      fallbackName={reply.userName}
+                      className="text-[9px] font-black uppercase text-gray-400"
                     />
-                    <span className="text-[10px] font-bold uppercase tracking-wide truncate group-hover:text-blue-400 text-gray-400">
-                      {mv.title || mv.name}
+                  </div>
+
+                  <span className="text-[7px] font-bold text-gray-600 uppercase tracking-tight flex-shrink-0">
+                    {reply.createdAt
+                      ? new Date(
+                          reply.createdAt.seconds * 1000,
+                        ).toLocaleDateString()
+                      : "Now"}
+                  </span>
+                </div>
+
+                {/* REPLY TEXT CONTENT */}
+                <div className="pl-5">
+                  {reply.text && (
+                    <p className="text-[11px] text-gray-300 font-medium">
+                      {reply.text}
+                    </p>
+                  )}
+                  {reply.movie && <AttachedMovieBadge movie={reply.movie} />}
+                </div>
+
+                {/* REPLY ACTIONS PANEL */}
+                <div className="pl-5 pt-0.5 flex items-center justify-between w-full">
+                  <button
+                    onClick={() => handleReplyLike(reply.id, reply.likes)}
+                    className={`flex items-center gap-1 text-[8px] font-black uppercase tracking-widest transition-colors ${
+                      isReplyLikedByMe
+                        ? "text-rose-500 hover:text-rose-400"
+                        : "text-gray-600 hover:text-gray-400"
+                    }`}
+                  >
+                    <Heart
+                      className={`w-2.5 h-2.5 ${isReplyLikedByMe ? "fill-rose-500" : ""}`}
+                    />
+                    <span>
+                      {isReplyLikedByMe ? "Liked" : "Vibe"} (
+                      {reply.likes?.length || 0})
                     </span>
                   </button>
-                ))}
+
+                  {(currentUser?.uid === reply.userId ||
+                    currentUser?.uid === post.userId) && (
+                    <button
+                      onClick={() => handleDeleteReply(reply.id)}
+                      className="text-gray-600 hover:text-red-500 transition-colors p-0.5"
+                      title="Delete Reply"
+                    >
+                      <Trash2 className="w-2.5 h-2.5" />
+                    </button>
+                  )}
+                </div>
               </div>
-            )}
-          </form>
-        )}
-      </div>
-    );
-  }
+            );
+          })}
+        </div>
+      )}
+
+      {showReplyForm && (
+        <form
+          onSubmit={handleAddReply}
+          className="pl-7 pt-2 space-y-2 relative animate-in slide-in-from-top-1 duration-150"
+        >
+          {selectedReplyMovie && (
+            <div className="bg-blue-500/10 border border-blue-500/20 p-1.5 rounded-xl flex items-center justify-between text-[10px]">
+              <span className="font-black uppercase tracking-wide text-blue-400">
+                🍿 Tagged in Reply:{" "}
+                {selectedReplyMovie.title || selectedReplyMovie.name}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedReplyMovie(null)}
+                className="text-gray-400 hover:text-white text-[9px]"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          <div className="flex gap-2 items-start">
+            <div className="flex-1 flex flex-col gap-1">
+              <input
+                type="text"
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Write a reply..."
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[11px] focus:outline-none focus:border-blue-500 text-gray-300 placeholder-gray-600"
+                autoFocus
+              />
+              <input
+                type="text"
+                value={replyMovieQuery}
+                onChange={(e) => setReplyMovieQuery(e.target.value)}
+                placeholder="Tag film inside reply (optional)..."
+                className="w-full bg-white/[0.01] border border-white/5 rounded-lg px-3 py-1 text-[9px] focus:outline-none focus:border-blue-500/40 text-gray-500 placeholder-gray-700"
+              />
+            </div>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shadow-md mt-0.5"
+            >
+              Reply
+            </button>
+          </div>
+
+          {replyMovieResults.length > 0 && (
+            <div className="absolute left-0 right-0 bottom-full mb-1 bg-[#121929] border border-white/10 rounded-xl max-h-32 overflow-y-auto z-[60] p-1.5 space-y-0.5 no-scrollbar shadow-2xl">
+              {replyMovieResults.map((mv) => (
+                <button
+                  key={mv.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedReplyMovie(mv);
+                    setReplyMovieResults([]);
+                    setReplyMovieQuery("");
+                  }}
+                  className="w-full flex items-center gap-2 p-1 hover:bg-white/5 rounded-lg text-left transition-all group"
+                >
+                  <img
+                    src={`https://image.tmdb.org/t/p/w92${mv.poster_path}`}
+                    className="w-4 h-6 object-cover rounded"
+                    alt=""
+                  />
+                  <span className="text-[10px] font-bold uppercase tracking-wide truncate group-hover:text-blue-400 text-gray-400">
+                    {mv.title || mv.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </form>
+      )}
+    </div>
+  );
 };
 
 // =========================================================
@@ -424,7 +571,6 @@ const PostCard = ({ post, currentUser }) => {
     return () => clearTimeout(delayDebounce);
   }, [commentMovieQuery]);
 
-  // Kapag binuksan ang modal, i-ready ang default clone name ng folder
   useEffect(() => {
     if (isListModalOpen && post.watchListName) {
       setClonedListName(`${post.watchListName} (Copy)`);
@@ -482,7 +628,6 @@ const PostCard = ({ post, currentUser }) => {
     }
   };
 
-  // EXECUTE CORE DUPLICATION FLOW INTO USER'S OWN DB PATH
   const handleCloneWatchlist = async () => {
     if (!currentUser) return alert("Please login to copy this watchlist!");
     if (!clonedListName.trim()) return alert("Watchlist name cannot be empty!");
@@ -524,13 +669,15 @@ const PostCard = ({ post, currentUser }) => {
           />
         ) : (
           <div className="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center font-black text-xs text-blue-400 group-hover:bg-blue-600/30 transition-colors">
-            {post.userName?.[0]?.toUpperCase()}
+            {post.userName?.[0]?.toUpperCase() || "U"}
           </div>
         )}
         <div>
-          <h4 className="text-xs font-black uppercase tracking-wider text-white group-hover:text-blue-400 transition-colors">
-            {post.userName}
-          </h4>
+          <UsernameDisplay
+            userId={post.userId}
+            fallbackName={post.userName}
+            className="text-xs font-black uppercase tracking-wider text-white group-hover:text-blue-400 transition-colors"
+          />
           <p className="text-[9px] font-bold text-gray-500 uppercase mt-0.5 tracking-widest">
             {post.createdAt
               ? new Date(post.createdAt.seconds * 1000).toLocaleDateString()
@@ -627,7 +774,6 @@ const PostCard = ({ post, currentUser }) => {
 
       {/* CORE INTERACTIONS PANEL */}
       <div className="flex items-center gap-2 pt-2 border-t border-white/5 mt-2">
-        {/* LIKE / VIBES BUTTON */}
         <button
           onClick={handleLike}
           className={`flex-1 py-2.5 rounded-xl border flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider transition-all ${
@@ -644,7 +790,6 @@ const PostCard = ({ post, currentUser }) => {
           Vibes ({post.likes?.length || 0})
         </button>
 
-        {/* DISCUSS / COMMENT BUTTON */}
         <button
           onClick={() => setShowComments(!showComments)}
           className={`flex-1 py-2.5 rounded-xl border flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider transition-all ${
@@ -713,7 +858,7 @@ const PostCard = ({ post, currentUser }) => {
                   type="text"
                   value={commentMovieQuery}
                   onChange={(e) => setCommentMovieQuery(e.target.value)}
-                  placeholder="Tag film inside comment (optional)..." // Tinanggal ang movie emoji para sa premium at malinis na coding look
+                  placeholder="Tag film inside comment (optional)..."
                   className="w-full bg-white/[0.02] border border-white/5 rounded-xl px-4 py-1.5 text-[10px] focus:outline-none focus:border-blue-500/50 text-gray-400 placeholder-gray-700"
                 />
               </div>
@@ -754,7 +899,7 @@ const PostCard = ({ post, currentUser }) => {
         </div>
       )}
 
-      {/* POPUP MODAL FOR SHARED WATCHLIST CONTENT (WITH CLONE & RENAME CAPABILITIES) */}
+      {/* POPUP MODAL FOR SHARED WATCHLIST */}
       {isListModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div
@@ -762,7 +907,6 @@ const PostCard = ({ post, currentUser }) => {
             onClick={() => setIsListModalOpen(false)}
           />
           <div className="bg-[#0b111e] border border-white/10 w-full max-w-4xl rounded-[2.5rem] p-6 md:p-8 relative z-10 max-h-[85vh] flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
-            {/* Modal Top Context Control Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 border-b border-white/5 pb-4 gap-4">
               <div>
                 <span className="text-[9px] font-black uppercase tracking-widest text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded mb-1 inline-block">
@@ -780,7 +924,6 @@ const PostCard = ({ post, currentUser }) => {
               </button>
             </div>
 
-            {/* INTERACTIVE DUPLICATION WORKSPACE ACTION BAR */}
             {currentUser && currentUser.uid !== post.userId && (
               <div className="mb-6 bg-white/[0.02] border border-white/5 p-4 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-inner">
                 <div className="flex-1">
@@ -806,7 +949,6 @@ const PostCard = ({ post, currentUser }) => {
                       : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg"
                   }`}
                 >
-                  {/* DYNAMIC ICON area */}
                   {isCopying ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : isCopySuccess ? (
@@ -815,7 +957,6 @@ const PostCard = ({ post, currentUser }) => {
                     <Copy className="w-3.5 h-3.5" />
                   )}
 
-                  {/* DYNAMIC TEXT area */}
                   {isCopying
                     ? "Cloning..."
                     : isCopySuccess
@@ -825,7 +966,6 @@ const PostCard = ({ post, currentUser }) => {
               </div>
             )}
 
-            {/* Grid display of folder content loaded */}
             <div className="overflow-y-auto flex-1 pr-2 custom-scrollbar">
               {post.watchlistMovies && post.watchlistMovies.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 py-2">
@@ -874,23 +1014,7 @@ const Newsfeed = ({ user }) => {
 
   const [isComposerOpen, setIsComposerOpen] = useState(false);
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
-        <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mb-4 shadow-[0_0_30px_rgba(37,99,235,0.1)]">
-          <Lock className="w-6 h-6 animate-pulse" />
-        </div>
-        <h3 className="text-lg font-black uppercase tracking-wider text-white">
-          Please Log In First
-        </h3>
-        <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
-          You need to be logged in to view and interact with the Vibe Feed. Join
-          the community and start sharing your movie vibes!
-        </p>
-      </div>
-    );
-  }
-
+  // LAHAT NG EFFECT AT HOOKS AY NASA PINAKATAAS DAPAT BAGO ANG KAHIT ANONG CONDITIONAL RETURNS!
   useEffect(() => {
     const postsRef = collection(db, "posts");
     const q = query(postsRef, orderBy("createdAt", "desc"));
@@ -994,6 +1118,27 @@ const Newsfeed = ({ user }) => {
     }
   };
 
+  // =========================================================
+  // DITO INTERNALLY ANG CONDITIONAL RETURN CHECK NI REACT
+  // =========================================================
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
+        <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mb-4 shadow-[0_0_30px_rgba(37,99,235,0.1)]">
+          <Lock className="w-6 h-6 animate-pulse" />
+        </div>
+        <h3 className="text-lg font-black uppercase tracking-wider text-white">
+          Please Log In First
+        </h3>
+        <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
+          You need to be logged in to view and interact with the Vibe Feed. Join
+          the community and start sharing your movie vibes!
+        </p>
+      </div>
+    );
+  }
+
+  // PAG NAKALAP NA ANG USER, ITO NAMAN ANG TATAKBO
   return (
     <div className="min-h-screen bg-[#080d17] text-white px-4 py-10 md:px-16 flex flex-col items-center">
       <div className="w-full max-w-2xl space-y-6">
