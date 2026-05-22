@@ -162,9 +162,12 @@ function App() {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[9999] p-4">
           <div className="w-full max-w-md bg-[#0d1527] border border-white/5 rounded-[2rem] p-6 text-center shadow-2xl">
             <span className="text-4xl block mb-3">🎬</span>
+
+            {/* ✅ INAYOS DITO: Pinalitan ang nakasirang <Movie> ng malinis na text o text wrapper */}
             <h2 className="text-xl font-black text-white uppercase tracking-wide mb-1">
-              Welcome to Vibe <Movie></Movie>!
+              Welcome to Movie Vibe!
             </h2>
+
             <p className="text-xs text-gray-400 max-w-xs mx-auto mb-6">
               Please Enter a Nickname to Start Vibing with the Movie Community!
               You can always change this later in your Settings.
