@@ -49,7 +49,6 @@ const Profile = ({ user }) => {
             favGenres: data.favGenres || [],
             favActors: data.favActors || [],
             favMovies: data.favMovies || [],
-            // Babasahin muna yung bagong saved nickname sa DB, kung wala (halimbawa, lumang test), magfa-fallback sa Google handle o placeholder
             displayName:
               data.displayName ||
               data.userName ||
@@ -62,7 +61,6 @@ const Profile = ({ user }) => {
                 : "https://via.placeholder.com/150"),
           });
         } else {
-          // Kapag walang document o kung ikaw mismo ito (default state fallback)
           setProfileData({
             bio: "",
             favoriteMovieCover: "",
@@ -85,12 +83,38 @@ const Profile = ({ user }) => {
     };
 
     fetchProfile();
-  }, [targetUid, user]); // Siguraduhing kasama si targetUid dito para mag-trigger tuwing lilipat ng profile!
+  }, [targetUid, user]);
+
+  // ✅ SAFE REMOVE FUNCTION WITH INDEX FILTERING
+  const removeMovie = async (movieId) => {
+    try {
+      const currentMovies = profileData.favMovies || [];
+      const firstIndex = currentMovies.findIndex((m) => m.id === movieId);
+
+      if (firstIndex === -1) return;
+
+      const updatedMovies = currentMovies.filter(
+        (_, index) => index !== firstIndex,
+      );
+
+      setProfileData((prev) => ({
+        ...prev,
+        favMovies: updatedMovies,
+      }));
+
+      if (user?.uid) {
+        const docRef = doc(db, "users", user.uid);
+        await setDoc(docRef, { favMovies: updatedMovies }, { merge: true });
+        console.log("Movie removed successfully!");
+      }
+    } catch (error) {
+      console.error("Error removing movie:", error);
+    }
+  };
 
   const handleSaveBio = async () => {
     try {
       const userDoc = doc(db, "users", user.uid);
-      // Gagamit tayo ng { merge: true } para bio lang ang mabago
       await setDoc(userDoc, { bio: profileData.bio }, { merge: true });
       setIsEditingBio(false);
       console.log("Bio saved!");
@@ -112,8 +136,6 @@ const Profile = ({ user }) => {
     try {
       const userDoc = doc(db, "users", user.uid);
       await setDoc(userDoc, { favoriteMovieCover: newCover }, { merge: true });
-
-      // I-update ang local state para makita agad ang change
       setProfileData((prev) => ({ ...prev, favoriteMovieCover: newCover }));
       setIsModalOpen(false);
       setSearchTerm("");
@@ -133,8 +155,7 @@ const Profile = ({ user }) => {
           Please Log In First
         </h3>
         <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
-          You need to be logged in to view and manage your profile. Join the
-          community and start building your cinema history!
+          You need to be logged in to view and manage your profile.
         </p>
       </div>
     );
@@ -142,15 +163,6 @@ const Profile = ({ user }) => {
 
   if (loading)
     return <div className="p-10 text-center">Loading Profile...</div>;
-
-  const updateProfileArray = async (field, newData) => {
-    setProfileData((prev) => ({ ...prev, [field]: newData }));
-    await setDoc(
-      doc(db, "users", user.uid),
-      { [field]: newData },
-      { merge: true },
-    );
-  };
 
   const staticGenres = [
     "Action",
@@ -194,7 +206,6 @@ const Profile = ({ user }) => {
     setSearchTerm(query);
     if (query.length > 2) {
       try {
-        // Palitan ang YOUR_API_KEY_HERE ng totoong key mo
         const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
         const res = await fetch(
           `https://api.themoviedb.org/3/search/person?api_key=${API_KEY}&query=${query}`,
@@ -226,14 +237,7 @@ const Profile = ({ user }) => {
       const updatedActors = profileData.favActors.filter(
         (a) => a.id !== actorId,
       );
-
-      // Update local state
-      setProfileData((prev) => ({
-        ...prev,
-        favActors: updatedActors,
-      }));
-
-      // Update Firebase
+      setProfileData((prev) => ({ ...prev, favActors: updatedActors }));
       if (user?.uid) {
         const docRef = doc(db, "users", user.uid);
         await setDoc(docRef, { favActors: updatedActors }, { merge: true });
@@ -243,11 +247,22 @@ const Profile = ({ user }) => {
     }
   };
 
+  // ✅ STRICT NO-DUPLICATE ENGINE
   const addMovie = (movie) => {
-    // Siguraduhin na may fallback array ( || [] )
     const currentMovies = profileData.favMovies || [];
 
     if (currentMovies.length < 5) {
+      const isAlreadyAdded = currentMovies.some(
+        (m) => String(m.id) === String(movie.id),
+      );
+
+      if (isAlreadyAdded) {
+        setIsModalOpen(false);
+        setSearchTerm("");
+        setSearchResults([]);
+        return;
+      }
+
       const newMovie = {
         id: movie.id,
         title: movie.title,
@@ -256,14 +271,11 @@ const Profile = ({ user }) => {
         year: movie.release_date?.split("-")[0],
       };
 
-      // Ngayon, hindi na ito mag-e-error dahil 'currentMovies' ay laging array
-      if (!currentMovies.some((m) => m.id === movie.id)) {
-        const updatedMovies = [...currentMovies, newMovie];
-        saveData({ favMovies: updatedMovies });
-        setIsModalOpen(false);
-        setSearchTerm(""); // Linisin na rin ang search
-        setSearchResults([]);
-      }
+      const updatedMovies = [...currentMovies, newMovie];
+      saveData({ favMovies: updatedMovies });
+      setIsModalOpen(false);
+      setSearchTerm("");
+      setSearchResults([]);
     }
   };
 
@@ -280,9 +292,9 @@ const Profile = ({ user }) => {
           Back to Newsfeed
         </button>
       )}
+
       {/* HEADER SECTION */}
       <div className="bg-[#0f172a] rounded-[2rem] p-6 md:p-10 border border-white/10 relative overflow-hidden flex items-center min-h-[250px] shadow-2xl">
-        {/* EDIT COVER BUTTON */}
         {isOwnProfile && (
           <button
             onClick={() => {
@@ -314,7 +326,6 @@ const Profile = ({ user }) => {
           </button>
         )}
 
-        {/* BACKGROUND IMAGE & GRADIENT (The Fade Transition) */}
         {profileData.favoriteMovieCover && (
           <div className="absolute inset-0 z-0">
             <img
@@ -322,14 +333,11 @@ const Profile = ({ user }) => {
               className="absolute right-0 top-0 h-full w-full md:w-[80%] object-cover opacity-40 transition-opacity duration-700"
               alt=""
             />
-            {/* Ito yung nagpapakinis ng transition (Left to Right fade) */}
             <div className="absolute inset-0 bg-gradient-to-r from-[#0f172a] via-[#0f172a]/80 to-transparent"></div>
-            {/* Optional: Dagdag na fade sa ilalim para blend sa card body */}
             <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent"></div>
           </div>
         )}
 
-        {/* PROFILE INFO */}
         <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 text-center md:text-left w-full">
           <img
             src={
@@ -344,7 +352,6 @@ const Profile = ({ user }) => {
             <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter">
               {profileData.displayName || user?.displayName || "Movie Viber"}
             </h1>
-
             <div className="flex items-center justify-center md:justify-start gap-3 mt-3">
               {isEditingBio ? (
                 <div className="flex gap-2">
@@ -397,7 +404,7 @@ const Profile = ({ user }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-10">
-        {/* FAVORITE GENRES SECTION */}
+        {/* GENRES */}
         <div className="bg-[#0f172a] rounded-[2rem] p-8 border border-white/10 shadow-xl flex flex-col">
           <div className="flex justify-between items-center mb-8">
             <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
@@ -412,17 +419,16 @@ const Profile = ({ user }) => {
                   setModalType("genre");
                   setIsModalOpen(true);
                 }}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-lg shadow-blue-600/20"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:scale-105 shadow-lg"
               >
                 + Add
               </button>
             )}
           </div>
-
           <div className="grid grid-cols-1 gap-3 flex-1">
             {profileData.favGenres?.map((genre, index) => (
               <div
-                key={index}
+                key={`genre-${genre}-${index}`}
                 className="group relative bg-gradient-to-r from-white/5 to-transparent border border-white/5 p-5 rounded-2xl flex justify-between items-center hover:border-blue-500/50 hover:from-blue-500/10 transition-all duration-300"
               >
                 <div className="flex items-center gap-4">
@@ -434,7 +440,7 @@ const Profile = ({ user }) => {
                 {isOwnProfile && (
                   <button
                     onClick={() => removeGenre(genre)}
-                    className="opacity-0 group-hover:opacity-100 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white p-2 rounded-lg transition-all duration-200"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-red-500 transition-colors opacity-100 font-bold"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -462,32 +468,28 @@ const Profile = ({ user }) => {
           </div>
         </div>
 
-        {/* FAVORITE ACTORS SECTION */}
-        <div className="bg-[#1a2235] border border-white/5 rounded-[3rem] p-6 md:p-8">
+        {/* ACTORS */}
+        <div className="bg-[#0f172a] border border-white/10 rounded-2xl md:rounded-[2.5rem] p-4 md:p-8 shadow-xl flex flex-col">
           <div className="flex justify-between items-center mb-8 px-4">
-            <div className="flex items-center gap-4">
-              <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
-                <Users className="w-6 h-6 text-red-500 stroke-[2.5]" />
-                Top 3 Favorite Actors
-              </h3>
-            </div>
+            <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+              <Users className="w-6 h-6 text-red-500 stroke-[2.5]" /> Top 3
+              Favorite Actors
+            </h3>
           </div>
-
-          {/* Grid: Maliit na gap (gap-4) para mas lumaki ang mismong cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5 w-full">
-            {profileData.favActors?.slice(0, 3).map((actor) => (
-              <div key={actor.id} className="relative group w-full h-full">
-                {/* ArtistCard - Kakainin nito ang buong width ng grid column */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5 w-full flex-1">
+            {profileData.favActors?.slice(0, 3).map((actor, index) => (
+              <div
+                key={`actor-${actor.id}-${index}`}
+                className="relative group w-full h-full"
+              >
                 <ArtistCard artist={actor} />
-
-                {/* Remove Button */}
                 {isOwnProfile && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       removeActor(actor.id);
                     }}
-                    className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 p-3 bg-black/60 hover:bg-red-600 text-white rounded-2xl backdrop-blur-md transition-all shadow-2xl"
+                    className="absolute right-4 top-4 text-gray-400 hover:text-red-500 transition-colors z-20 bg-black/40 backdrop-blur-sm p-1.5 rounded-lg"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -507,18 +509,16 @@ const Profile = ({ user }) => {
                 )}
               </div>
             ))}
-
-            {/* Placeholder Slot - Sinlaki rin ng mga cards */}
             {isOwnProfile && profileData.favActors?.length < 3 && (
               <button
                 onClick={() => {
                   setModalType("actor");
                   setIsModalOpen(true);
                 }}
-                className="w-full aspect-[2/3] border-2 border-dashed border-white/5 rounded-[2.5rem] flex flex-col items-center justify-center gap-6 hover:bg-white/5 hover:border-red-500/50 transition-all group"
+                className="w-full aspect-[2/3] border-2 border-dashed border-white/10 rounded-2xl md:rounded-[2.5rem] flex flex-col items-center justify-center gap-6 hover:bg-white/5 transition-all group"
               >
-                <div className="w-20 h-20 bg-white/5 rounded-[2.5rem] flex items-center justify-center group-hover:scale-110 transition-transform group-hover:bg-red-500/10">
-                  <span className="text-4xl text-gray-600 group-hover:text-red-500">
+                <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <span className="text-3xl text-gray-600 group-hover:text-red-500">
                     +
                   </span>
                 </div>
@@ -531,7 +531,7 @@ const Profile = ({ user }) => {
         </div>
       </div>
 
-      {/* TOP 5 FAVORITE MOVIES SECTION */}
+      {/* TOP 5 FAVORITE MOVIES */}
       <div className="bg-[#0f172a] rounded-[2rem] p-8 border border-white/10 shadow-xl mt-8">
         <div className="flex justify-between items-center mb-8">
           <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
@@ -553,11 +553,9 @@ const Profile = ({ user }) => {
           )}
         </div>
 
-        {/* Profile.jsx - Favorite Movies Section */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
-          {/* 1. Nilagyan natin ng slice(0, 5) para hanggang lima lang ang lumabas */}
-          {profileData.favMovies?.slice(0, 5).map((movie) => (
-            <div key={movie.id} className="relative group">
+          {profileData.favMovies?.slice(0, 5).map((movie, index) => (
+            <div key={`deck-${movie.id}-${index}`} className="relative group">
               <MovieCard
                 movie={{
                   ...movie,
@@ -570,7 +568,7 @@ const Profile = ({ user }) => {
                     e.stopPropagation();
                     removeMovie(movie.id);
                   }}
-                  className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 p-2 bg-black/60 hover:bg-red-600 text-white rounded-xl backdrop-blur-md transition-all"
+                  className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-lg text-xs z-10 font-bold shadow-md opacity-100"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -591,14 +589,13 @@ const Profile = ({ user }) => {
             </div>
           ))}
 
-          {/* 2. Lalabas lang ang 'Add' button kung wala pang 5 movies */}
           {isOwnProfile && profileData.favMovies?.length < 5 && (
             <button
               onClick={() => {
                 setModalType("movie");
                 setIsModalOpen(true);
               }}
-              className="aspect-[2/3] border-2 border-dashed border-white/10 rounded-[2rem] flex flex-col items-center justify-center gap-3 hover:bg-white/5 hover:border-blue-500/50 transition-all group"
+              className="aspect-[2/3] border-2 border-dashed border-white/10 rounded-[2rem] flex flex-col items-center justify-center gap-3 hover:bg-white/5 transition-all group"
             >
               <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                 <span className="text-2xl text-gray-500">+</span>
@@ -618,23 +615,21 @@ const Profile = ({ user }) => {
             className="absolute inset-0 bg-black/90 backdrop-blur-md"
             onClick={() => {
               setIsModalOpen(false);
-              setSearchResults([]); // Linisin ang results pag sinara
-              setSearchTerm(""); // Linisin ang text pag sinara
+              setSearchResults([]);
+              setSearchTerm("");
             }}
           ></div>
-
           <div className="bg-gray-900 border border-white/10 w-full max-w-md rounded-[2.5rem] p-8 relative z-10 max-h-[80vh] flex flex-col">
             <h2 className="text-2xl font-black mb-6 text-white uppercase tracking-tighter">
               {modalType === "cover"
                 ? "Set Header Movie"
                 : modalType === "genre"
                   ? "Select Genre"
-                  : modalType === "movie" // Idagdag ito
+                  : modalType === "movie"
                     ? "Add Favorite Movie"
                     : "Search Actor"}
             </h2>
 
-            {/* 1. SEARCH INPUT (Para sa Cover at Actor lang) */}
             {modalType !== "genre" && (
               <input
                 type="text"
@@ -649,7 +644,7 @@ const Profile = ({ user }) => {
                 className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 mb-4 text-white focus:outline-none focus:border-blue-500 transition-all"
                 value={searchTerm}
                 onChange={
-                  modalType === "cover" || modalType === "movie" // Pagsamahin sila rito
+                  modalType === "cover" || modalType === "movie"
                     ? handleSearchCover
                     : (e) => searchPeople(e.target.value)
                 }
@@ -657,18 +652,19 @@ const Profile = ({ user }) => {
             )}
 
             <div className="overflow-y-auto flex-1 pr-2 custom-scrollbar">
-              {/* 2. COVER RESULTS */}
+              {/* ✅ MODAL MOVIE COVER SEARCH KEYS FIXED */}
               {modalType === "cover" && (
                 <div className="space-y-2">
-                  {searchResults.map((movie) => (
+                  {searchResults.map((movie, index) => (
                     <button
-                      key={movie.id}
+                      key={`search-cover-${movie.id}-${index}`}
                       onClick={() => selectCover(movie)}
                       className="w-full flex items-center gap-4 p-2 hover:bg-white/5 rounded-xl transition-all text-left group"
                     >
                       <img
                         src={`https://image.tmdb.org/t/p/w92${movie.poster_path}`}
                         className="w-12 h-16 object-cover rounded-lg"
+                        alt=""
                       />
                       <div>
                         <p className="font-bold text-white group-hover:text-blue-400">
@@ -683,12 +679,11 @@ const Profile = ({ user }) => {
                 </div>
               )}
 
-              {/* 3. GENRE LIST */}
               {modalType === "genre" && (
                 <div className="grid grid-cols-2 gap-2">
                   {staticGenres.map((g) => (
                     <button
-                      key={g}
+                      key={`modal-genre-${g}`}
                       disabled={profileData.favGenres?.includes(g)}
                       onClick={() => {
                         handleAddGenre(g);
@@ -702,12 +697,11 @@ const Profile = ({ user }) => {
                 </div>
               )}
 
-              {/* 4. ACTOR RESULTS */}
               {modalType === "actor" && (
                 <div className="space-y-2">
-                  {searchResults.map((person) => (
+                  {searchResults.map((person, index) => (
                     <button
-                      key={person.id}
+                      key={`search-actor-${person.id}-${index}`}
                       onClick={() => addActor(person)}
                       className="w-full flex items-center gap-4 p-2 hover:bg-white/5 rounded-2xl transition-all text-left group"
                     >
@@ -718,6 +712,7 @@ const Profile = ({ user }) => {
                             : "https://via.placeholder.com/45"
                         }
                         className="w-10 h-10 rounded-full object-cover"
+                        alt=""
                       />
                       <span className="text-white font-bold group-hover:text-yellow-500">
                         {person.name}
@@ -727,13 +722,13 @@ const Profile = ({ user }) => {
                 </div>
               )}
 
-              {/* 5. MOVIE RESULTS (Yung idinagdag natin) */}
+              {/* ✅ MODAL FAV MOVIE SEARCH KEYS FIXED */}
               {modalType === "movie" && (
                 <div className="space-y-2">
-                  {searchResults.map((movie) => (
+                  {searchResults.map((movie, index) => (
                     <button
-                      key={movie.id}
-                      onClick={() => addMovie(movie)} // Tatawagin nito yung function na ginawa natin kanina
+                      key={`search-movie-${movie.id}-${index}`}
+                      onClick={() => addMovie(movie)}
                       className="w-full flex items-center gap-4 p-2 hover:bg-white/5 rounded-2xl transition-all text-left group"
                     >
                       <img
