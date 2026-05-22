@@ -102,7 +102,7 @@ const AttachedMovieBadge = ({ movie }) => {
 // =========================================================
 // SUB-COMPONENT: INDIVIDUAL COMMENT BLOCK WITH LIKES AND REPLIES
 // =========================================================
-const CommentBlock = ({ post, comment, currentUser }) => {
+const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
   const navigate = useNavigate();
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyText, setReplyText] = useState("");
@@ -305,7 +305,13 @@ const CommentBlock = ({ post, comment, currentUser }) => {
           {(currentUser?.uid === comment.userId ||
             currentUser?.uid === post.userId) && (
             <button
-              onClick={handleDeleteComment}
+              onClick={() =>
+                setItemToDelete({
+                  type: "comment",
+                  postId: post.id,
+                  commentId: comment.id,
+                })
+              }
               className="text-gray-600 hover:text-red-500 transition-colors p-1"
               title="Delete Comment"
             >
@@ -420,7 +426,14 @@ const CommentBlock = ({ post, comment, currentUser }) => {
                   {(currentUser?.uid === reply.userId ||
                     currentUser?.uid === post.userId) && (
                     <button
-                      onClick={() => handleDeleteReply(reply.id)}
+                      onClick={() =>
+                        setItemToDelete({
+                          type: "reply",
+                          postId: post.id,
+                          commentId: comment.id,
+                          replyId: reply.id,
+                        })
+                      }
                       className="text-gray-600 hover:text-red-500 transition-colors p-0.5"
                       title="Delete Reply"
                     >
@@ -515,7 +528,7 @@ const CommentBlock = ({ post, comment, currentUser }) => {
 // =========================================================
 // SUB-COMPONENT: REUSABLE POST CARD WITH WATCHLIST, LIKES & COMMENTS
 // =========================================================
-const PostCard = ({ post, currentUser }) => {
+const PostCard = ({ post, currentUser, showToast, setItemToDelete }) => {
   const navigate = useNavigate();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isListModalOpen, setIsListModalOpen] = useState(false);
@@ -822,6 +835,7 @@ const PostCard = ({ post, currentUser }) => {
                   post={post}
                   comment={comment}
                   currentUser={currentUser}
+                  setItemToDelete={setItemToDelete}
                 />
               ))
             )}
@@ -1014,6 +1028,28 @@ const Newsfeed = ({ user }) => {
 
   const [isComposerOpen, setIsComposerOpen] = useState(false);
 
+  const [itemToDelete, setItemToDelete] = useState(null);
+
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "info",
+  });
+
+  // Hanapin at i-update itong function na ito sa iyong file:
+  const showToast = (message, type = "success") => {
+    setToast({
+      show: true,
+      message: message,
+      type: type,
+    });
+
+    // Awtomatikong itago ang banner pagkalipas ng 3 segundo
+    setTimeout(() => {
+      setToast({ show: false, message: "", type: "info" });
+    }, 3000);
+  };
+
   // LAHAT NG EFFECT AT HOOKS AY NASA PINAKATAAS DAPAT BAGO ANG KAHIT ANONG CONDITIONAL RETURNS!
   useEffect(() => {
     const postsRef = collection(db, "posts");
@@ -1075,12 +1111,24 @@ const Newsfeed = ({ user }) => {
 
   const handleCreatePost = async (e) => {
     e.preventDefault();
-    if (!user) return alert("Please login to post!");
-
-    if (composerTab === "tag" && !text.trim() && taggedMovies.length === 0)
-      return;
-    if (composerTab === "watchlist" && !selectedWatchlist)
-      return alert("Please select a watchlist folder to share!");
+    if (!user)
+      return showToast("You must be logged in to release content. ⚠️", "error");
+    if (
+      composerTab === "discussion" &&
+      !text.trim() &&
+      taggedMovies.length === 0
+    ) {
+      return showToast(
+        "Please write something or attach a media tag! 📝",
+        "error",
+      );
+    }
+    if (composerTab === "watchlist" && !selectedWatchlist) {
+      return showToast(
+        "Please choose a watchlist folder to share! 📁",
+        "error",
+      );
+    }
 
     try {
       const baseData = {
@@ -1108,6 +1156,8 @@ const Newsfeed = ({ user }) => {
 
       await addDoc(collection(db, "posts"), { ...baseData });
 
+      showToast("Vibe context added to timeline pipeline! 🚀", "success");
+
       setText("");
       setTaggedMovies([]);
       setSelectedWatchlist(null);
@@ -1115,6 +1165,59 @@ const Newsfeed = ({ user }) => {
       setIsComposerOpen(false);
     } catch (error) {
       console.error("Error creating post:", error);
+    }
+  };
+
+  const handleExecuteItemDelete = async () => {
+    if (!itemToDelete) return;
+
+    try {
+      if (itemToDelete.type === "post") {
+        await deleteDoc(doc(db, "posts", itemToDelete.postId));
+      } else if (itemToDelete.type === "comment") {
+        const commentDocRef = doc(
+          db,
+          "posts",
+          itemToDelete.postId,
+          "comments",
+          itemToDelete.commentId,
+        );
+        await deleteDoc(commentDocRef);
+      } else if (itemToDelete.type === "reply") {
+        const replyRef = doc(
+          db,
+          "posts",
+          itemToDelete.postId,
+          "comments",
+          itemToDelete.commentId,
+          "replies",
+          itemToDelete.replyId,
+        );
+        await deleteDoc(replyRef);
+      }
+
+      // 1. I-set ang tagumpay na mensahe sa banner
+      setToast({
+        show: true,
+        message: `Successfully deleted ${itemToDelete.type}!`,
+        type: "success",
+      });
+
+      // 2. Awtomatikong itago ang banner pagkalipas ng 3 segundo
+      setTimeout(() => {
+        setToast({ show: false, message: "", type: "info" });
+      }, 3000);
+
+      setItemToDelete(null); // Isara ang modal
+    } catch (err) {
+      console.error("Error executing delete:", err);
+
+      // Banner para sa error tracking
+      setToast({
+        show: true,
+        message: `Failed to delete ${itemToDelete.type}.`,
+        type: "error",
+      });
     }
   };
 
@@ -1189,7 +1292,13 @@ const Newsfeed = ({ user }) => {
             </div>
           ) : (
             posts.map((post) => (
-              <PostCard key={post.id} post={post} currentUser={user} />
+              <PostCard
+                key={post.id}
+                post={post}
+                currentUser={user}
+                showToast={showToast}
+                setItemToDelete={setItemToDelete}
+              />
             ))
           )}
         </div>
@@ -1388,6 +1497,65 @@ const Newsfeed = ({ user }) => {
                   : "Post to Timeline"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+      {/* CONFIRMATION MODAL FOR DELETION */}
+      {itemToDelete && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#0e1420] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-2xl">
+            <div className="w-12 h-12 bg-red-600/10 rounded-full flex items-center justify-center text-red-500 mx-auto">
+              <Trash2 className="w-5 h-5" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-sm font-black uppercase italic tracking-wider text-white">
+                Delete this {itemToDelete.type}?
+              </h3>
+              <p className="text-xs text-gray-400 font-medium leading-relaxed px-4">
+                Sigurado ka ba? Kapag binura mo ito, permanenteng mawawala ang{" "}
+                {itemToDelete.type === "comment" ? "komento" : "reply"} na ito.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setItemToDelete(null)}
+                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteItemDelete}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* FLOATING NOTIFICATION BANNER - CENTER TOP */}
+      {toast.show && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[110] animate-in fade-in slide-in-from-top-4 duration-300 w-full max-w-sm px-4">
+          <div
+            className={`px-4 py-3 rounded-2xl border backdrop-blur-md flex items-center justify-center gap-2.5 shadow-2xl ${
+              toast.type === "success"
+                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                : "bg-red-500/10 border-red-500/20 text-red-400"
+            }`}
+          >
+            {/* Icon base sa status */}
+            {toast.type === "success" ? (
+              <span className="text-xs">✨</span>
+            ) : (
+              <span className="text-xs">⚠️</span>
+            )}
+            <span className="text-[10px] font-black uppercase tracking-wider text-center">
+              {toast.message}
+            </span>
           </div>
         </div>
       )}

@@ -30,11 +30,11 @@ import {
   ArrowLeft,
 } from "lucide-react";
 
-import { getDoc } from "firebase/firestore"; // Siguraduhing may getDoc ka sa imports sa taas
+import { getDoc } from "firebase/firestore";
 
 const UsernameDisplay = ({ userId, fallbackName, className }) => {
   const [displayName, setDisplayName] = useState(fallbackName || "Anonymous");
-  const navigate = useNavigate(); // <-- Tawagin si navigate sa loob
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!userId) return;
@@ -54,7 +54,7 @@ const UsernameDisplay = ({ userId, fallbackName, className }) => {
 
   return (
     <button
-      onClick={() => navigate(`/profile/${userId}`)} // <-- Dadalhin sa profile kapag clinick
+      onClick={() => navigate(`/profile/${userId}`)}
       className={`${className} hover:underline text-left cursor-pointer`}
       type="button"
     >
@@ -72,7 +72,7 @@ const AttachedMovieBadge = ({ movie }) => {
   return (
     <button
       type="button"
-      onClick={() => navigate(`/movie/${movie.id}`)} // Dadalhin ang user sa details page ng movie
+      onClick={() => navigate(`/movie/${movie.id}`)}
       className="mt-1.5 flex items-center gap-2 bg-white/[0.03] hover:bg-blue-600/10 border border-white/5 hover:border-blue-500/30 rounded-xl p-1 max-w-xs group shadow-sm text-left w-full transition-all duration-200"
     >
       <img
@@ -96,7 +96,13 @@ const AttachedMovieBadge = ({ movie }) => {
 // =========================================================
 // SUB-COMPONENT: INDIVIDUAL MANAGED COMMENT ITEM WITH ACTIONS
 // =========================================================
-const ManagedCommentItem = ({ postId, comment, currentUser, post }) => {
+const ManagedCommentItem = ({
+  postId,
+  comment,
+  currentUser,
+  post,
+  setItemToDelete,
+}) => {
   const [showReplies, setShowReplies] = useState(false);
   const [replies, setReplies] = useState([]);
   const [replyText, setReplyText] = useState("");
@@ -105,6 +111,7 @@ const ManagedCommentItem = ({ postId, comment, currentUser, post }) => {
   const [replyMovie, setReplyMovie] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  const navigate = useNavigate();
 
   const commentLikes = comment.likes || [];
   const isCommentLikedByMe = currentUser
@@ -209,49 +216,9 @@ const ManagedCommentItem = ({ postId, comment, currentUser, post }) => {
     }
   };
 
-  const handleDeleteComment = async () => {
-    if (
-      !window.confirm("Sigurado ka bang gusto mong burahin ang komentong ito?")
-    )
-      return;
-
-    try {
-      // Gagamitin ang post.id at comment.id na hawak ng props ng component na ito
-      const commentDocRef = doc(db, "posts", post.id, "comments", comment.id);
-      await deleteDoc(commentDocRef);
-    } catch (err) {
-      console.error("Error deleting comment:", err);
-      alert("Hindi nabura ang komento.");
-    }
-  };
-
-  const handleDeleteReply = async (replyId) => {
-    if (
-      !window.confirm("Sigurado ka bang gusto mong burahin ang reply na ito?")
-    )
-      return;
-
-    try {
-      const replyRef = doc(
-        db,
-        "posts",
-        post.id, // Siguraduhing naipasa ang buong post prop gaya ng inayos natin kanina
-        "comments",
-        comment.id,
-        "replies",
-        replyId,
-      );
-      await deleteDoc(replyRef);
-    } catch (err) {
-      console.error("Error deleting reply:", err);
-      alert("Hindi nabura ang reply.");
-    }
-  };
-
   return (
     <div className="bg-white/[0.01] border border-white/[0.02] p-3 rounded-2xl space-y-1.5">
       <div className="flex gap-3 items-start">
-        {/* AVATAR SECTION (KALIWA) */}
         <button
           type="button"
           onClick={() => navigate(`/profile/${comment.userId}`)}
@@ -271,19 +238,16 @@ const ManagedCommentItem = ({ postId, comment, currentUser, post }) => {
           )}
         </button>
 
-        {/* CONTENT BLOCK (KANAN) */}
         <div className="flex-1 space-y-0.5 min-w-0">
-          {/* HEADER ROW: Name sa kaliwa, Date + Trash sa kanan */}
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-black text-white uppercase tracking-wide truncate pr-2">
               <UsernameDisplay
-                userId={post.userId}
-                fallbackName={post.userName}
-                className="text-sm font-black text-white uppercase tracking-wide"
+                userId={comment.userId}
+                fallbackName={comment.userName}
+                className="text-xs sm:text-sm font-black text-white uppercase tracking-wide"
               />
             </span>
 
-            {/* KANANG BAHAGI NG HEADER: Date at Moderation Trash Icon */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="text-[7px] font-bold text-gray-600 uppercase tracking-tight">
                 {comment.createdAt
@@ -293,12 +257,17 @@ const ManagedCommentItem = ({ postId, comment, currentUser, post }) => {
                   : "Now"}
               </span>
 
-              {/* TRASH ICON FOR MODERATION PRIVILEGES */}
               {(currentUser?.uid === comment.userId ||
-                currentUser?.uid === comment.postOwnerId ||
+                currentUser?.uid === post?.userId ||
                 currentUser?.uid === auth.currentUser?.uid) && (
                 <button
-                  onClick={handleDeleteComment}
+                  onClick={() =>
+                    setItemToDelete({
+                      type: "comment",
+                      postId: postId,
+                      commentId: comment.id,
+                    })
+                  }
                   className="text-gray-600 hover:text-red-500 transition-colors p-0.5"
                   title="Delete Comment"
                 >
@@ -308,14 +277,12 @@ const ManagedCommentItem = ({ postId, comment, currentUser, post }) => {
             </div>
           </div>
 
-          {/* COMMENT TEXT */}
           {comment.text && (
             <p className="text-gray-300 text-xs font-normal leading-normal break-words">
               {comment.text}
             </p>
           )}
 
-          {/* ATTACHED MOVIE BADGE */}
           <AttachedMovieBadge movie={comment.movie} />
         </div>
       </div>
@@ -340,16 +307,14 @@ const ManagedCommentItem = ({ postId, comment, currentUser, post }) => {
       </div>
 
       {showReplies && (
-        <div className="pl-8 pt-1.5 space-y-2 border-l border-white/5 ml-2.5">
+        <div className="pl-4 sm:pl-8 pt-1.5 space-y-2 border-l border-white/5 ml-2.5">
           <div className="space-y-1.5 max-h-32 overflow-y-auto no-scrollbar">
             {replies.map((reply) => (
               <div
                 key={reply.id}
                 className="flex gap-2 bg-white/[0.005] p-2 rounded-xl items-start justify-between"
               >
-                {/* KALIWANG BAHAGI: Avatar + Text Info Layout */}
                 <div className="flex gap-2 items-start flex-1 min-w-0">
-                  {/* PROFILE PICTURE / AVATAR */}
                   <button
                     type="button"
                     onClick={() => navigate(`/profile/${reply.userId}`)}
@@ -369,13 +334,12 @@ const ManagedCommentItem = ({ postId, comment, currentUser, post }) => {
                     )}
                   </button>
 
-                  {/* USERNAME & REPLY CONTENT */}
                   <div className="flex-1 min-w-0">
                     <span className="text-[8px] font-black text-white uppercase tracking-wide block">
                       <UsernameDisplay
-                        userId={post.userId}
-                        fallbackName={post.userName}
-                        className="text-sm font-black text-white uppercase tracking-wide"
+                        userId={reply.userId}
+                        fallbackName={reply.userName}
+                        className="text-xs font-black text-white uppercase tracking-wide"
                       />
                     </span>
                     {reply.text && (
@@ -387,7 +351,6 @@ const ManagedCommentItem = ({ postId, comment, currentUser, post }) => {
                   </div>
                 </div>
 
-                {/* KANANG BAHAGI: Mini Date stamp at Delete button */}
                 <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5 pl-2">
                   <span className="text-[7px] font-bold text-gray-600 uppercase tracking-tight">
                     {reply.createdAt
@@ -398,9 +361,16 @@ const ManagedCommentItem = ({ postId, comment, currentUser, post }) => {
                   </span>
 
                   {(currentUser?.uid === reply.userId ||
-                    currentUser?.uid === post.userId) && (
+                    currentUser?.uid === post?.userId) && (
                     <button
-                      onClick={() => handleDeleteReply(reply.id)}
+                      onClick={() =>
+                        setItemToDelete({
+                          type: "reply",
+                          postId: postId,
+                          commentId: comment.id,
+                          replyId: reply.id,
+                        })
+                      }
                       className="text-gray-600 hover:text-red-500 transition-colors p-0.5"
                       title="Delete Reply"
                     >
@@ -426,20 +396,20 @@ const ManagedCommentItem = ({ postId, comment, currentUser, post }) => {
               </div>
             )}
             <div className="flex gap-2">
-              <div className="flex-1 bg-white/5 border border-white/5 rounded-xl flex items-center px-3 relative">
+              <div className="flex-1 bg-white/5 border border-white/5 rounded-xl flex items-center px-2 sm:px-3 relative">
                 <input
                   type="text"
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
                   placeholder="Reply..."
-                  className="flex-1 bg-transparent py-1.5 text-xs text-gray-300 focus:outline-none"
+                  className="flex-1 bg-transparent py-1.5 text-xs text-gray-300 focus:outline-none placeholder-gray-600"
                 />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Film..." // Malinis na plain text placeholder para sa minimalist tech vibe
-                  className="w-16 bg-white/5 border border-white/5 rounded px-1 text-[7px] text-right focus:outline-none focus:border-blue-500/30 transition-all text-gray-300 placeholder-gray-600"
+                  placeholder="Film..."
+                  className="w-12 sm:w-16 bg-white/5 border border-white/5 rounded px-1 text-[7px] text-right focus:outline-none focus:border-blue-500/30 transition-all text-gray-300 placeholder-gray-600"
                 />
                 {searchResults.length > 0 && (
                   <div className="absolute left-0 right-0 bottom-full mb-1 bg-[#141f35] border border-white/10 rounded-xl max-h-24 overflow-y-auto z-50 p-1 space-y-0.5 no-scrollbar">
@@ -463,7 +433,7 @@ const ManagedCommentItem = ({ postId, comment, currentUser, post }) => {
               <button
                 type="submit"
                 disabled={!replyText.trim() && !replyMovie}
-                className="px-3 bg-blue-600 text-white disabled:text-gray-600 rounded-xl text-[8px] font-black uppercase"
+                className="px-2.5 sm:px-3 bg-blue-600 text-white disabled:text-gray-600 rounded-xl text-[8px] font-black uppercase"
               >
                 Send
               </button>
@@ -483,6 +453,7 @@ const ManagedPostCard = ({
   currentUser,
   onEditTrigger,
   onDeleteTrigger,
+  setItemToDelete,
 }) => {
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState([]);
@@ -578,21 +549,20 @@ const ManagedPostCard = ({
   };
 
   return (
-    <div className="bg-white/[0.01] border border-white/5 rounded-[2.5rem] p-6 space-y-4 shadow-md">
+    <div className="bg-white/[0.01] border border-white/5 rounded-[2rem] sm:rounded-[2.5rem] p-4 sm:p-6 space-y-4 shadow-md">
       {post.content && (
-        <p className="text-gray-300 text-sm font-medium leading-relaxed whitespace-pre-wrap">
+        <p className="text-gray-300 text-xs sm:text-sm font-medium leading-relaxed whitespace-pre-wrap">
           {post.content}
         </p>
       )}
 
-      {/* DYNAMIC ATTACHMENTS FOR FOLDER OR MEDIA */}
       {post.postType === "watchlist" ? (
         <div className="pt-2 border-t border-white/5 mt-2">
           <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
             <FolderHeart className="w-3 h-3 text-blue-500" />
             Shared Watchlist Folder:
           </p>
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 inline-block max-w-xs">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 inline-block max-w-xs w-full">
             <h4 className="text-xs font-black uppercase tracking-wide text-white truncate flex items-center gap-1.5">
               <FolderHeart className="w-3.5 h-3.5 text-gray-400" />
               {post.watchListName}
@@ -610,7 +580,7 @@ const ManagedPostCard = ({
               <Clapperboard className="w-3.5 h-3.5 text-gray-600" />
               Tagged Media ({post.movies.length}):
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
               {post.movies.map((mv) => (
                 <MovieCard
                   key={mv.id}
@@ -623,7 +593,7 @@ const ManagedPostCard = ({
                 />
               ))}
             </div>
-            <div className="flex items-center justify-end text-[9px] font-black uppercase tracking-widest text-gray-500 italic pt-1 gap-1">
+            <div className="flex items-center justify-end text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-gray-500 italic pt-1 gap-1">
               <Heart
                 className={`w-3 h-3 ${post.likes && post.likes.length > 0 ? "text-rose-500 fill-rose-500" : "text-gray-500"}`}
               />
@@ -635,29 +605,32 @@ const ManagedPostCard = ({
         )
       )}
 
-      <div className="flex items-center gap-2 pt-2 border-t border-white/5">
-        <button
-          onClick={handleLikeToggle}
-          className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${isLikedByMe ? "bg-blue-600/20 border border-blue-500/40 text-blue-400" : "bg-white/5 border border-white/5 text-gray-400 hover:text-white"}`}
-        >
-          <Heart
-            className={`w-3 h-3 ${isLikedByMe ? "text-blue-400 fill-blue-400" : "text-gray-400"}`}
-          />
-          {isLikedByMe ? "Liked" : "Like"}
-        </button>
-        <button
-          onClick={() => setShowComments(!showComments)}
-          className={`px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${showComments ? "bg-white/10 border border-white/20 text-white" : "bg-white/5 border border-white/5 text-gray-400 hover:text-white"}`}
-        >
-          <MessageSquare className="w-3 h-3" />
-          <span>Comment</span>
-          {commentCount > 0 && (
-            <span className="bg-white/10 text-white font-bold text-[8px] px-1 py-0.5 rounded">
-              {commentCount}
-            </span>
-          )}
-        </button>
-        <div className="flex-1 text-right text-[9px] font-black uppercase tracking-wider text-gray-500 italic space-x-1.5 flex items-center justify-end gap-1">
+      {/* METRICS & CALL TO ACTIONS ROW */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-white/5">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleLikeToggle}
+            className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${isLikedByMe ? "bg-blue-600/20 border border-blue-500/40 text-blue-400" : "bg-white/5 border border-white/5 text-gray-400 hover:text-white"}`}
+          >
+            <Heart
+              className={`w-3 h-3 ${isLikedByMe ? "text-blue-400 fill-blue-400" : "text-gray-400"}`}
+            />
+            {isLikedByMe ? "Liked" : "Like"}
+          </button>
+          <button
+            onClick={() => setShowComments(!showComments)}
+            className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${showComments ? "bg-white/10 border border-white/20 text-white" : "bg-white/5 border border-white/5 text-gray-400 hover:text-white"}`}
+          >
+            <MessageSquare className="w-3 h-3" />
+            <span>Comment</span>
+            {commentCount > 0 && (
+              <span className="bg-white/10 text-white font-bold text-[8px] px-1 py-0.5 rounded">
+                {commentCount}
+              </span>
+            )}
+          </button>
+        </div>
+        <div className="text-left sm:text-right text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-gray-500 italic flex items-center gap-1.5 sm:justify-end">
           <span>
             {likeCount === 0
               ? "No vibes"
@@ -688,9 +661,10 @@ const ManagedPostCard = ({
                 <ManagedCommentItem
                   key={comment.id}
                   postId={post.id}
-                  post={post} // <-- IDAGDAG ITONG LINYA NA ITO DITO!
+                  post={post}
                   comment={comment}
                   currentUser={currentUser}
+                  setItemToDelete={setItemToDelete}
                 />
               ))
             )}
@@ -710,20 +684,20 @@ const ManagedPostCard = ({
               </div>
             )}
             <div className="flex items-center gap-2">
-              <div className="flex-1 bg-white/5 border border-white/5 rounded-2xl flex items-center px-4 relative">
+              <div className="flex-1 bg-white/5 border border-white/5 rounded-2xl flex items-center px-3 sm:px-4 relative">
                 <input
                   type="text"
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                   placeholder="Write a comment..."
-                  className="flex-1 bg-transparent py-2.5 text-xs focus:outline-none text-gray-300 placeholder-gray-600"
+                  className="flex-1 bg-transparent py-2 sm:py-2.5 text-xs focus:outline-none text-gray-300 placeholder-gray-600"
                 />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search film..." // Cleaned placeholder string
-                  className="w-24 bg-white/5 border border-white/5 rounded-xl px-2 py-1 text-[9px] text-right focus:outline-none focus:border-blue-500/30 transition-all"
+                  placeholder="Film..."
+                  className="w-16 sm:w-24 bg-white/5 border border-white/5 rounded-xl px-2 py-1 text-[9px] text-right focus:outline-none focus:border-blue-500/30 transition-all"
                 />
                 {searchResults.length > 0 && (
                   <div className="absolute left-0 right-0 bottom-full mb-1 bg-[#141f35] border border-white/10 rounded-xl max-h-32 overflow-y-auto z-50 p-1 space-y-0.5 no-scrollbar">
@@ -747,7 +721,7 @@ const ManagedPostCard = ({
               <button
                 type="submit"
                 disabled={!commentText.trim() && !commentMovie}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-[#121a2e] disabled:border disabled:border-white/5 text-white disabled:text-gray-600 rounded-2xl text-[9px] font-black uppercase tracking-wider transition-all"
+                className="px-3 py-2 sm:px-4 sm:py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-[#121a2e] disabled:border disabled:border-white/5 text-white disabled:text-gray-600 rounded-2xl text-[9px] font-black uppercase tracking-wider transition-all"
               >
                 Send
               </button>
@@ -756,17 +730,18 @@ const ManagedPostCard = ({
         </div>
       )}
 
+      {/* CORE CONTROL DELETION & EDIT TRIGGER BUTTONS */}
       <div className="flex items-center gap-2 pt-3 border-t border-white/5 mt-2">
         <button
           onClick={() => onEditTrigger(post)}
-          className="flex-1 py-2.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 text-yellow-500 font-black uppercase tracking-widest text-[10px] rounded-xl transition-all flex items-center justify-center gap-1.5"
+          className="flex-1 py-2 sm:py-2.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 text-yellow-500 font-black uppercase tracking-widest text-[9px] sm:text-[10px] rounded-xl transition-all flex items-center justify-center gap-1.5"
         >
           <PencilLine className="w-3.5 h-3.5" />
           Edit Text
         </button>
         <button
           onClick={() => onDeleteTrigger(post.id)}
-          className="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 font-black uppercase tracking-widest text-[10px] rounded-xl transition-all flex items-center justify-center gap-1.5"
+          className="flex-1 py-2 sm:py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 font-black uppercase tracking-widest text-[9px] sm:text-[10px] rounded-xl transition-all flex items-center justify-center gap-1.5"
         >
           <Trash2 className="w-3.5 h-3.5" />
           Delete Post
@@ -786,6 +761,17 @@ const ManagePost = ({ user }) => {
   const [editText, setEditText] = useState("");
   const [postToDelete, setPostToDelete] = useState(null);
   const navigate = useNavigate();
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "info",
+  });
+  const [itemToDelete, setItemToDelete] = useState(null);
+
+  const showToast = (message, type = "info") => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast((prev) => ({ ...prev, show: false })), 3000);
+  };
 
   useEffect(() => {
     if (!user) {
@@ -817,8 +803,10 @@ const ManagePost = ({ user }) => {
     try {
       await deleteDoc(doc(db, "posts", postToDelete));
       setPostToDelete(null);
+      showToast("Post removed from timeline! 👋", "success");
     } catch (error) {
       console.error(error);
+      showToast("Failed to delete post.", "error");
     }
   };
 
@@ -829,8 +817,43 @@ const ManagePost = ({ user }) => {
       await updateDoc(doc(db, "posts", editingPost.id), { content: editText });
       setEditingPost(null);
       setEditText("");
+      showToast("Post updated successfully! ✏️", "success");
     } catch (error) {
       console.error(error);
+      showToast("Failed to update post.", "error");
+    }
+  };
+
+  const handleExecuteItemDelete = async () => {
+    if (!itemToDelete) return;
+    const { type, postId, commentId, replyId } = itemToDelete;
+
+    try {
+      if (type === "comment") {
+        const commentDocRef = doc(db, "posts", postId, "comments", commentId);
+        await deleteDoc(commentDocRef);
+        showToast("Comment successfully deleted! 👋", "success");
+      } else if (type === "reply") {
+        const replyRef = doc(
+          db,
+          "posts",
+          postId,
+          "comments",
+          commentId,
+          "replies",
+          replyId,
+        );
+        await deleteDoc(replyRef);
+        showToast("Reply successfully deleted! 👋", "success");
+      }
+    } catch (err) {
+      console.error("Error configuration during deletion:", err);
+      showToast(
+        `Hindi nabura ang ${type === "comment" ? "komento" : "reply"}. ⚠️`,
+        "error",
+      );
+    } finally {
+      setItemToDelete(null);
     }
   };
 
@@ -843,30 +866,33 @@ const ManagePost = ({ user }) => {
   }
 
   return (
-    <div className="min-h-screen bg-[#080d17] text-white px-4 py-10 md:px-16 flex flex-col items-center">
+    // INAYOS ANG TOP/BOTTOM AT SIDE PADDINGS PARA RESPONSIVE SA MOBILE SCREEN SIZES
+    <div className="min-h-screen bg-[#080d17] text-white px-4 py-6 sm:py-10 md:px-16 flex flex-col items-center">
       <div className="w-full max-w-2xl space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        {/* TOP COMPONENT HEADER LAYOUT */}
+        <div className="flex flex-row items-center justify-between gap-3 mt-2 sm:mt-0">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <button
               onClick={() => navigate("/feed")}
-              className="bg-white/5 hover:bg-white/10 p-3 rounded-full text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center"
+              className="bg-white/5 hover:bg-white/10 p-2.5 sm:p-3 rounded-full text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center flex-shrink-0"
             >
               <ArrowLeft className="w-4 h-4 text-gray-300" />
             </button>
-            <div>
-              <h1 className="text-2xl font-black uppercase italic tracking-tighter">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-black uppercase italic tracking-tighter truncate">
                 Manage My Posts
               </h1>
-              <p className="text-gray-500 text-[9px] font-bold uppercase tracking-widest mt-0.5">
+              <p className="text-gray-500 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest mt-0.5 truncate">
                 Edit or cleanup your feed presence
               </p>
             </div>
           </div>
-          <span className="bg-blue-600/10 border border-blue-500/20 text-blue-400 font-black text-xs px-3 py-1.5 rounded-xl italic">
-            {myPosts.length} Total Posts
+          <span className="bg-blue-600/10 border border-blue-500/20 text-blue-400 font-black text-[10px] sm:text-xs px-2.5 py-1.5 rounded-xl italic flex-shrink-0">
+            {myPosts.length} Posts
           </span>
         </div>
 
+        {/* FEED CARDS LIST ENCLOSURE */}
         <div className="space-y-4">
           {myPosts.length === 0 ? (
             <div className="text-center py-20 border border-dashed border-white/5 rounded-[3rem] bg-white/[0.005]">
@@ -885,6 +911,7 @@ const ManagePost = ({ user }) => {
                   setEditText(p.content);
                 }}
                 onDeleteTrigger={(id) => setPostToDelete(id)}
+                setItemToDelete={setItemToDelete}
               />
             ))
           )}
@@ -893,9 +920,9 @@ const ManagePost = ({ user }) => {
 
       {editingPost && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0e1626] border border-white/10 w-full max-w-lg rounded-[2.5rem] p-6 space-y-4 shadow-2xl">
+          <div className="bg-[#0e1626] border border-white/10 w-full max-w-lg rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
-              <h3 className="text-sm font-black uppercase italic tracking-widest text-yellow-500">
+              <h3 className="text-xs sm:text-sm font-black uppercase italic tracking-widest text-yellow-500">
                 Edit Post Content
               </h3>
               <button
@@ -909,12 +936,12 @@ const ManagePost = ({ user }) => {
               <textarea
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
-                className="w-full bg-transparent text-sm font-medium focus:outline-none placeholder-gray-600 resize-none h-36 custom-scrollbar"
+                className="w-full bg-transparent text-xs sm:text-sm font-medium focus:outline-none placeholder-gray-600 resize-none h-36 custom-scrollbar text-gray-300"
                 autoFocus
               />
               <button
                 type="submit"
-                className="w-full py-4 bg-yellow-500 text-black rounded-[1.8rem] font-black uppercase italic tracking-widest text-xs transition-all shadow-lg"
+                className="w-full py-3.5 sm:py-4 bg-yellow-500 text-black rounded-[1.5rem] sm:rounded-[1.8rem] font-black uppercase italic tracking-widest text-xs transition-all shadow-lg"
               >
                 Save Changes
               </button>
@@ -925,31 +952,89 @@ const ManagePost = ({ user }) => {
 
       {postToDelete && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0e1626] border border-white/10 w-full max-w-sm rounded-[2.5rem] p-6 text-center space-y-6 shadow-2xl">
-            <div className="w-16 h-16 bg-red-600/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto shadow-inner shadow-red-900/10">
-              <AlertTriangle className="w-7 h-7 stroke-[2.5]" />
+          <div className="bg-[#0e1626] border border-white/10 w-full max-w-sm rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-6 text-center space-y-6 shadow-2xl">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-red-600/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6 sm:w-7 sm:h-7 stroke-[2.5]" />
             </div>
             <div className="space-y-2">
-              <h3 className="text-sm font-black uppercase italic tracking-wider text-white">
+              <h3 className="text-xs sm:text-sm font-black uppercase italic tracking-wider text-white">
                 Delete this post?
               </h3>
-              <p className="text-xs text-gray-400 font-medium leading-relaxed px-2">
+              <p className="text-[11px] sm:text-xs text-gray-400 font-medium leading-relaxed px-1">
                 Are you sure? Once deleted, this post and all its tagged movie
-                info will be removed from the Vibe Feed permanently.
+                info will be removed permanently.
               </p>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={() => setPostToDelete(null)}
-                className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 border border-white/5 text-gray-400 hover:text-white rounded-[1.5rem] font-black uppercase tracking-widest text-[10px] transition-all"
+                className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/5 text-gray-400 hover:text-white rounded-xl sm:rounded-[1.5rem] font-black uppercase tracking-widest text-[9px] sm:text-[10px] transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmDelete}
-                className="flex-1 py-3.5 bg-red-600 hover:bg-red-500 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-[10px] transition-all shadow-lg shadow-red-900/20"
+                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl sm:rounded-[1.5rem] font-black uppercase tracking-widest text-[9px] sm:text-[10px] transition-all shadow-lg"
               >
                 Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast.show && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] w-[90%] sm:w-auto pointer-events-none animate-in fade-in slide-in-from-top-4 duration-300">
+          <div
+            className={`px-4 py-3 sm:px-6 sm:py-3.5 rounded-xl sm:rounded-2xl font-black uppercase tracking-wider text-[10px] sm:text-xs shadow-2xl border flex items-center justify-center gap-2 text-white ${
+              toast.type === "success"
+                ? "bg-emerald-600/90 border-emerald-500/30 backdrop-blur-md"
+                : "bg-rose-600/90 border-rose-500/30 backdrop-blur-md"
+            }`}
+          >
+            <span>{toast.type === "success" ? "⚡" : "⚠️"}</span>
+            {toast.message}
+          </div>
+        </div>
+      )}
+
+      {itemToDelete && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div
+            className="absolute inset-0 bg-black/85 backdrop-blur-md"
+            onClick={() => setItemToDelete(null)}
+          />
+
+          <div className="bg-[#0b111e] border border-white/10 w-full max-w-sm rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-6 text-center space-y-5 relative z-10 shadow-2xl">
+            <div className="w-12 h-14 bg-red-500/10 border border-red-500/20 text-red-400 rounded-full flex items-center justify-center mx-auto">
+              <Trash2 className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-xs sm:text-sm font-black uppercase italic tracking-wider text-white">
+                Delete this {itemToDelete.type}?
+              </h3>
+              <p className="text-[11px] sm:text-xs text-gray-400 font-medium leading-relaxed px-2">
+                Are you sure? Once deleted, this {itemToDelete.type} will be
+                permanently removed.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setItemToDelete(null)}
+                className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/5 text-gray-400 hover:text-white rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] transition-all"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExecuteItemDelete}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] transition-all shadow-lg"
+              >
+                Delete
               </button>
             </div>
           </div>

@@ -17,6 +17,7 @@ import {
 } from "../services/api";
 import MovieCard from "../components/MovieCard";
 import { useNavigate } from "react-router-dom";
+import { Lock } from "lucide-react";
 
 // Utility function sa labas ng component para iwas initialization error
 const getDailyFeaturedMovie = (movieList) => {
@@ -45,6 +46,13 @@ const Home = ({ user, searchResults, searchLoading }) => {
   const [watchedIds, setWatchedIds] = useState([]);
 
   const navigate = useNavigate();
+
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "info",
+  });
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -146,13 +154,20 @@ const Home = ({ user, searchResults, searchLoading }) => {
       </div>
     );
 
+  const showToast = (message, type = "info") => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast((prev) => ({ ...prev, show: false }));
+    }, 3000); // Mawawala automatic pagkatapos ng 3 seconds
+  };
+
   // Function para i-save ang movie sa isang existing watchlist
   const handleSaveToPlaylist = async (playlistId, currentMovies = []) => {
     // DISKARTENG FLEXIBLE: Gamitin ang selectedDetails, kung wala, gamitin ang featuredMovie
     const activeMovie = selectedDetails || featuredMovie;
 
     if (!activeMovie) {
-      alert("No movie selected!");
+      showToast("No movie selected! 🍿", "error");
       return;
     }
 
@@ -162,7 +177,7 @@ const Home = ({ user, searchResults, searchLoading }) => {
     );
 
     if (movieExists) {
-      alert("This movie is already in the watchlist!");
+      showToast("This movie is already in the watchlist! 👀", "warning");
       return;
     }
 
@@ -181,7 +196,7 @@ const Home = ({ user, searchResults, searchLoading }) => {
       const playlistRef = doc(db, "users", user.uid, "watchlists", playlistId);
       await updateDoc(playlistRef, { movies: updatedMovies });
       setIsModalOpen(false);
-      alert("Successfully added to playlist! 🎬"); // Para may feedback ka na pumasok talaga
+      showToast("Successfully added to playlist! 🎬", "success");
     } catch (error) {
       console.error("Error adding movie to playlist:", error);
     }
@@ -213,7 +228,7 @@ const Home = ({ user, searchResults, searchLoading }) => {
       setIsCreating(false);
       setNewListName("");
       setIsModalOpen(false);
-      alert(`New playlist created and movie saved!`);
+      showToast("New playlist created and movie saved! 🎉", "success");
     } catch (error) {
       console.error("Error creating playlist:", error);
     }
@@ -258,9 +273,7 @@ const Home = ({ user, searchResults, searchLoading }) => {
                   <button
                     onClick={() => {
                       if (!user) {
-                        alert(
-                          "Please Login First!",
-                        );
+                        setIsLoginModalOpen(true); // Buksan ang login confirmation modal
                         return;
                       }
                       setIsModalOpen(true); // BUBUKSAN ANG MODAL KAPAG NAKA-LOGIN
@@ -556,6 +569,89 @@ const Home = ({ user, searchResults, searchLoading }) => {
           </div>
         )}
       </div>
+      {/* ========================================================= */}
+      {/* 1. DYNAMIC TOAST BANNER SYSTEM (LALABAS SA TAAS, MAGFA-FADE) */}
+      {/* ========================================================= */}
+      {toast.show && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] pointer-events-none animate-in fade-in slide-in-from-top-4 duration-300">
+          <div
+            className={`px-6 py-3.5 rounded-2xl font-black uppercase tracking-wider text-xs shadow-2xl border flex items-center gap-2 text-white ${
+              toast.type === "success"
+                ? "bg-emerald-600/90 border-emerald-500/30 backdrop-blur-md"
+                : toast.type === "error" || toast.type === "warning"
+                  ? "bg-rose-600/90 border-rose-500/30 backdrop-blur-md"
+                  : "bg-blue-600/90 border-blue-500/30 backdrop-blur-md"
+            }`}
+          >
+            <span>
+              {toast.type === "success"
+                ? "⚡"
+                : toast.type === "error"
+                  ? "⚠️"
+                  : "ℹ️"}
+            </span>
+            {toast.message}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 2. CONFIRMATION LOGIN REQUIRED MODAL (UPDATED FOR SIGN UP) */}
+      {/* ========================================================= */}
+      {isLoginModalOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          {/* Backdrop / Dilim sa likod */}
+          <div
+            className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            onClick={() => setIsLoginModalOpen(false)}
+          />
+
+          {/* Modal Box */}
+          <div className="bg-[#0b111e] border border-white/10 w-full max-w-sm rounded-[2.5rem] p-6 text-center space-y-5 relative z-10 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-full flex items-center justify-center mx-auto shadow-inner">
+              <Lock className="w-6 h-6 stroke-[2.5]" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-sm font-black uppercase italic tracking-wider text-white">
+                Please Login First!
+              </h3>
+              <p className="text-xs text-gray-400 font-medium leading-relaxed px-4">
+                You need to be logged in to create customized playlists or save
+                your favorite movie vibes.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              {/* CANCEL BUTTON */}
+              <button
+                type="button"
+                onClick={() => setIsLoginModalOpen(false)}
+                className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/5 text-gray-400 hover:text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all"
+              >
+                Cancel
+              </button>
+
+              {/* DIRECT SIGN UP ACTION BUTTON */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLoginModalOpen(false);
+
+                  // TIP: Kung may state ka para buksan ang login overlay sa top right,
+                  // pwede mo itong tawagin dito (Halimbawa: setIsAuthOpen(true))
+
+                  // O kaya naman i-scroll natin sila sa pinakataas para mapansin yung Sign In box:
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all shadow-lg"
+              >
+                Sign Up
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
