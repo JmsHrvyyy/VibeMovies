@@ -7,13 +7,14 @@ import {
   onSnapshot,
   query,
   orderBy,
-  doc, // Dagdag import
-  setDoc, // Dagdag import
-  deleteDoc, // Dagdag import
+  doc,
+  setDoc,
+  deleteDoc,
+  updateDoc,
 } from "firebase/firestore";
 import { searchMovies } from "../services/api";
 import MovieCard from "../components/MovieCard";
-import { Lock } from "lucide-react";
+import { Lock, Edit3, Check, X, Loader2 } from "lucide-react";
 
 const WatchlistPage = ({ user }) => {
   const [watchlists, setWatchlists] = useState([]);
@@ -24,18 +25,34 @@ const WatchlistPage = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [watchedIds, setWatchedIds] = useState([]);
+  const [listToDelete, setListToDelete] = useState(null);
 
-  // PINAGSAMANG HOOKS PARA WALANG ERRORS SA RULES OF HOOKS AT WALANG CRASH
+  // MGA BAGONG STATES PARA SA MGA DETALYADONG FEATURES
+  const [movieToRemove, setMovieToRemove] = useState(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameText, setEditNameText] = useState("");
+  const [wToast, setWToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
+  // Helper function para sa Toast/Banner notification
+  const triggerToast = (message, type = "success") => {
+    setWToast({ show: true, message, type });
+    setTimeout(() => {
+      setWToast({ show: false, message: "", type: "success" });
+    }, 3000);
+  };
+
   useEffect(() => {
     if (!user) return;
 
-    // 1. Kukunin ang lahat ng IDs sa watchedMovies collection
     const watchedQuery = collection(db, "users", user.uid, "watchedMovies");
     const unsubscribeWatched = onSnapshot(watchedQuery, (snapshot) => {
       setWatchedIds(snapshot.docs.map((doc) => doc.id));
     });
 
-    // 2. Kukunin ang mga watchlists naman
     const q = query(
       collection(db, "users", user.uid, "watchlists"),
       orderBy("createdAt", "desc"),
@@ -55,7 +72,6 @@ const WatchlistPage = ({ user }) => {
       }
     });
 
-    // Linisin ang parehong listeners kapag nag-unmount ang page
     return () => {
       unsubscribeWatched();
       unsubscribeWatchlists();
@@ -79,6 +95,23 @@ const WatchlistPage = ({ user }) => {
     );
   }
 
+  const deleteList = (list) => {
+    setListToDelete(list);
+  };
+
+  const handleExecuteListDelete = async () => {
+    if (!listToDelete || !user) return;
+    try {
+      const listRef = doc(db, "users", user.uid, "watchlists", listToDelete.id);
+      await deleteDoc(listRef);
+      setListToDelete(null);
+      triggerToast("Watchlist deleted successfully!", "success");
+    } catch (err) {
+      console.error(err);
+      triggerToast("Failed to delete watchlist.", "error");
+    }
+  };
+
   const createList = async () => {
     if (!newListName.trim()) return;
     await addDoc(collection(db, "users", user.uid, "watchlists"), {
@@ -88,8 +121,10 @@ const WatchlistPage = ({ user }) => {
     });
     setNewListName("");
     setIsCreating(false);
+    triggerToast("Created new movie collection folder! 📁");
   };
 
+  // BAGONG LOGIC: May banner feedback kapag matagumpay na naidagdag ang pelikula
   const addMovieToList = async (movie) => {
     if (!selectedList) return;
 
@@ -97,15 +132,14 @@ const WatchlistPage = ({ user }) => {
       id: movie.id,
       title: movie.title,
       poster: movie.poster_path,
-      backdrop_path: movie.backdrop_path, // KELANGAN ITO PARA SA HERO BACKGROUND
-      overview: movie.overview, // KELANGAN ITO PARA SA HERO DESCRIPTION
+      backdrop_path: movie.backdrop_path,
+      overview: movie.overview,
       rating: movie.vote_average?.toFixed(1) || "0.0",
       year: movie.release_date?.split("-")[0] || "N/A",
     };
 
-    // Iwasan ang duplicate sa loob ng same playlist
     if (selectedList.movies?.some((m) => m.id === movie.id)) {
-      alert("Movie already in playlist!");
+      triggerToast("Movie is already in this playlist! ⚠️", "error");
       return;
     }
 
@@ -115,13 +149,16 @@ const WatchlistPage = ({ user }) => {
       const listRef = doc(db, "users", user.uid, "watchlists", selectedList.id);
       await setDoc(listRef, { movies: updatedMovies }, { merge: true });
 
-      // Update local states
       setSelectedList((prev) => ({ ...prev, movies: updatedMovies }));
       setIsModalOpen(false);
       setSearchTerm("");
       setSearchResults([]);
+
+      // SUCCESS BANNER FOR ADDING MOVIE
+      triggerToast(`Successfully added "${movie.title}"! 🎬`, "success");
     } catch (error) {
       console.error("Error adding movie:", error);
+      triggerToast("Error linking movie to pipeline.", "error");
     }
   };
 
@@ -137,42 +174,59 @@ const WatchlistPage = ({ user }) => {
     }
   };
 
-  // Para burahin ang buong playlist/folder
-  const deletePlaylist = async (e, listId) => {
-    e.stopPropagation(); // Mahalaga ito para hindi bumukas ang folder pag-click sa X
-    if (window.confirm("Delete this watchlist?")) {
-      try {
-        await deleteDoc(doc(db, "users", user.uid, "watchlists", listId));
-      } catch (error) {
-        console.error("Error deleting:", error);
-      }
-    }
+  // BAGONG LOGIC: Gagawa ng custom modal trigger imbes na direktang mag-bura
+  const removeMovieFromList = (movie) => {
+    setMovieToRemove(movie);
   };
 
-  // Para mag-tanggal ng movie sa loob ng napiling playlist
-  const removeMovieFromList = async (movieId) => {
-    const updatedMovies = selectedList.movies.filter((m) => m.id !== movieId);
+  // Aktwal na pag-delete ng film sa loop pagka-click sa custom modal
+  const handleExecuteMovieRemove = async () => {
+    if (!movieToRemove || !selectedList) return;
+
+    const updatedMovies = selectedList.movies.filter(
+      (m) => m.id !== movieToRemove.id,
+    );
 
     try {
       const listRef = doc(db, "users", user.uid, "watchlists", selectedList.id);
       await setDoc(listRef, { movies: updatedMovies }, { merge: true });
 
-      // Update local state para mawala agad sa screen
       setSelectedList((prev) => ({ ...prev, movies: updatedMovies }));
+      setMovieToRemove(null);
+      triggerToast("Removed movie from collection pipeline.", "success");
     } catch (error) {
       console.error("Error removing movie:", error);
+      triggerToast("Failed to disconnect movie asset.", "error");
+    }
+  };
+
+  // BAGONG LOGIC: Pagbabago ng pangalan ng Watchlist Folder
+  const handleUpdateListName = async () => {
+    if (!editNameText.trim() || editNameText.trim() === selectedList.name) {
+      setIsEditingName(false);
+      return;
+    }
+
+    try {
+      const listRef = doc(db, "users", user.uid, "watchlists", selectedList.id);
+      await updateDoc(listRef, { name: editNameText.trim() });
+
+      setSelectedList((prev) => ({ ...prev, name: editNameText.trim() }));
+      setIsEditingName(false);
+      triggerToast("Watchlist renamed dynamically! 🔄", "success");
+    } catch (err) {
+      console.error("Error updating layout name:", err);
+      triggerToast("Failed to alter name context.", "error");
     }
   };
 
   return (
-    <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-8">
+    <div className="p-4 md:p-10 max-w-7xl mx-auto space-y-8 relative">
       {!selectedList ? (
         <>
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-4">
-              {/* Neon Blue Accent Pill (Kopya sa design ng Watched Movies) */}
               <div className="w-2.5 h-10 bg-blue-500 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
-
               <div>
                 <h1 className="text-3xl lg:text-4xl font-black text-white uppercase italic tracking-tighter">
                   My Watchlists
@@ -184,7 +238,7 @@ const WatchlistPage = ({ user }) => {
             </div>
             <button
               onClick={() => setIsCreating(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg cursor-pointer"
             >
               + New Playlist
             </button>
@@ -201,13 +255,13 @@ const WatchlistPage = ({ user }) => {
               />
               <button
                 onClick={createList}
-                className="bg-white text-black px-6 py-2 rounded-xl font-black uppercase text-xs"
+                className="bg-white text-black px-6 py-2 rounded-xl font-black uppercase text-xs cursor-pointer"
               >
                 Create
               </button>
               <button
                 onClick={() => setIsCreating(false)}
-                className="text-gray-400 font-bold text-xs px-2"
+                className="text-gray-400 font-bold text-xs px-2 cursor-pointer"
               >
                 Cancel
               </button>
@@ -216,7 +270,6 @@ const WatchlistPage = ({ user }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {watchlists.map((list) => {
-              // Kunin ang unang movie poster kung mayroon, otherwise null
               const coverPoster =
                 list.movies && list.movies.length > 0
                   ? `https://image.tmdb.org/t/p/w500${list.movies[0].poster}`
@@ -225,10 +278,12 @@ const WatchlistPage = ({ user }) => {
               return (
                 <div
                   key={list.id}
-                  onClick={() => setSelectedList(list)}
+                  onClick={() => {
+                    setSelectedList(list);
+                    setEditNameText(list.name); // Pre-fill para sa edit function mamaya
+                  }}
                   className="group cursor-pointer relative h-64 overflow-hidden rounded-[2.5rem] bg-[#0f172a] border border-white/10 hover:border-blue-500/50 transition-all shadow-2xl"
                 >
-                  {/* DYNAMIC COVER PHOTO */}
                   {coverPoster ? (
                     <img
                       src={coverPoster}
@@ -236,35 +291,36 @@ const WatchlistPage = ({ user }) => {
                       alt={list.name}
                     />
                   ) : (
-                    /* Placeholder kung empty ang folder */
                     <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 to-purple-600/20" />
                   )}
 
-                  {/* GRADIENT OVERLAY - Para mabasa ang text */}
                   <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/40 to-transparent" />
 
-                  {/* DELETE BUTTON */}
                   <button
-                    onClick={(e) => deletePlaylist(e, list.id)}
-                    className="absolute top-5 right-5 z-20 opacity-0 group-hover:opacity-100 p-2.5 bg-red-500 hover:bg-red-600 text-white rounded-2xl transition-all shadow-lg backdrop-blur-md"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteList(list);
+                    }}
+                    className="absolute top-6 right-6 z-20 p-2.5 bg-black/40 hover:bg-red-500/20 text-gray-400 hover:text-red-500 rounded-xl transition-all duration-300 cursor-pointer backdrop-blur-md border border-white/5 opacity-0 group-hover:opacity-100"
+                    title="Delete Watchlist"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
-                      fill="none"
+                      width="14"
+                      height="14"
                       viewBox="0 0 24 24"
+                      fill="none"
                       stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={3}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
                     </svg>
                   </button>
 
-                  {/* PLAYLIST INFO */}
                   <div className="absolute bottom-0 left-0 w-full p-8 z-10">
                     <h3 className="text-3xl font-black text-white truncate mb-1 tracking-tighter uppercase">
                       {list.name}
@@ -281,53 +337,99 @@ const WatchlistPage = ({ user }) => {
           </div>
         </>
       ) : (
+        /* ========================================================= */
+        /* INSIDE WATCHLIST COMPONENT VIEW - MGA BAGONG CODES */
+        /* ========================================================= */
         <div className="space-y-8 animate-in slide-in-from-right duration-300">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap md:flex-nowrap">
             <button
-              onClick={() => setSelectedList(null)}
-              className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-white transition-all"
+              onClick={() => {
+                setSelectedList(null);
+                setIsEditingName(false);
+              }}
+              className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-white transition-all cursor-pointer border border-white/5"
             >
               ← Back
             </button>
-            <div>
-              <h1 className="text-3xl font-black text-white tracking-tighter uppercase">
-                {selectedList.name}
-              </h1>
-              <p className="text-gray-500 font-bold text-xs uppercase tracking-widest">
-                {selectedList.movies?.length || 0} Movies in this list
-              </p>
+
+            <div className="flex items-center gap-3 flex-1 min-w-[200px]">
+              {isEditingName ? (
+                <div className="flex items-center gap-2 bg-white/5 border border-white/10 p-1.5 rounded-2xl max-w-md w-full animate-in fade-in duration-200">
+                  <input
+                    type="text"
+                    autoFocus
+                    className="flex-1 bg-transparent border-none text-xl font-black text-white px-3 focus:outline-none uppercase"
+                    value={editNameText}
+                    onChange={(e) => setEditNameText(e.target.value)}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && handleUpdateListName()
+                    }
+                  />
+                  <button
+                    onClick={handleUpdateListName}
+                    className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsEditingName(false);
+                      setEditNameText(selectedList.name);
+                    }}
+                    className="p-2 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl transition-all cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 group/title">
+                  <div>
+                    <h1 className="text-3xl font-black text-white tracking-tighter uppercase">
+                      {selectedList.name}
+                    </h1>
+                    <p className="text-gray-500 font-bold text-xs uppercase tracking-widest">
+                      {selectedList.movies?.length || 0} Movies in this list
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditNameText(selectedList.name);
+                      setIsEditingName(true);
+                    }}
+                    className="p-2 bg-white/5 border border-white/5 text-gray-500 hover:text-blue-400 rounded-xl transition-all md:opacity-0 md:group-hover/title:opacity-100 cursor-pointer"
+                    title="Edit Name"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* ITO YUNG BUTTON NA INAYOS NATIN */}
             <button
               onClick={() => setIsModalOpen(true)}
-              className="ml-auto bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold hover:scale-105 transition-all"
+              className="ml-auto bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold hover:scale-105 transition-all cursor-pointer shadow-lg"
             >
               + Add Movie
             </button>
           </div>
 
-          {/* Content: Movies in Selected List */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
             {selectedList.movies?.map((movie) => (
               <div key={movie.id} className="relative group">
-                {/* 1. GAMITIN ANG MOVIECARD COMPONENT PARA SA NAVIGATION */}
-                {/* Nilagyan ko ng transition para smooth ang paglabas ng delete button */}
                 <MovieCard
                   movie={{
                     ...movie,
-                    poster_path: movie.poster, // I-map natin yung 'poster' field mo sa 'poster_path' na gamit ng MovieCard
+                    poster_path: movie.poster,
                   }}
                   isWatched={watchedIds.includes(String(movie.id))}
                 />
 
-                {/* 2. REMOVE MOVIE BUTTON (Mananatili ang logic at style mo) */}
                 <button
                   onClick={(e) => {
-                    e.stopPropagation(); // Importante: para hindi mag-trigger ang navigation pag nag-delete
-                    removeMovieFromList(movie.id);
+                    e.stopPropagation();
+                    removeMovieFromList(movie); // Trinigger ang bagong confirmation modal state
                   }}
-                  className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 p-2 bg-black/60 hover:bg-red-600 text-white rounded-xl backdrop-blur-md transition-all"
+                  className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 p-2 bg-black/60 hover:bg-red-600 text-white rounded-xl backdrop-blur-md transition-all cursor-pointer border border-white/5"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -347,7 +449,6 @@ const WatchlistPage = ({ user }) => {
               </div>
             ))}
 
-            {/* EMPTY STATE (Original UI mo) */}
             {(!selectedList.movies || selectedList.movies.length === 0) && (
               <div className="col-span-full py-20 text-center border-2 border-dashed border-white/5 rounded-[3rem]">
                 <p className="text-gray-600 font-bold uppercase tracking-widest text-sm">
@@ -355,6 +456,108 @@ const WatchlistPage = ({ user }) => {
                 </p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* GLOBAL MODALS & FLOATING BANNERS FOR THIS VIEW */}
+      {/* ========================================================= */}
+
+      {/* FLOATING BANNER NOTIFICATION (CENTER TOP) */}
+      {wToast.show && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[120] animate-in fade-in slide-in-from-top-4 duration-300 w-full max-w-sm px-4">
+          <div
+            className={`px-4 py-3 rounded-2xl border backdrop-blur-md flex items-center justify-center gap-2.5 shadow-2xl ${
+              wToast.type === "success"
+                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                : "bg-red-500/10 border-red-500/20 text-red-400"
+            }`}
+          >
+            <span className="text-xs">
+              {wToast.type === "success" ? "✨" : "⚠️"}
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-wider text-center">
+              {wToast.message}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM CONFIRMATION MODAL FOR DELETING WHOLE WATCHLIST */}
+      {listToDelete && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#0e1420] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 bg-red-600/10 rounded-full flex items-center justify-center text-red-500 mx-auto">
+              <span className="text-lg">🗑️</span>
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-sm font-black uppercase italic tracking-wider text-white">
+                Delete Watchlist?
+              </h3>
+              <p className="text-xs text-gray-400 font-medium leading-relaxed px-4">
+                Sigurado ka ba? Permanenteng mabubura ang folder na{" "}
+                <span className="text-blue-400 font-bold">
+                  "{listToDelete.name}"
+                </span>
+                .
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setListToDelete(null)}
+                className="flex-1 py-3.5 bg-white/5 text-gray-400 hover:text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteListDelete}
+                className="flex-1 py-3.5 bg-red-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BAGONG CUSTOM MODAL: CONFIRMATION FOR REMOVING A MOVIE FROM THE LIST */}
+      {movieToRemove && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#0e1420] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 bg-red-600/10 rounded-full flex items-center justify-center text-red-500 mx-auto">
+              <span className="text-sm">🎬</span>
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-sm font-black uppercase italic tracking-wider text-white">
+                Remove Movie?
+              </h3>
+              <p className="text-xs text-gray-400 font-medium leading-relaxed px-4">
+                Gusto mo bang alisin si{" "}
+                <span className="text-blue-400 font-bold">
+                  "{movieToRemove.title || movieToRemove.name}"
+                </span>{" "}
+                sa listahang ito?
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setMovieToRemove(null)}
+                className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all cursor-pointer border border-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteMovieRemove}
+                className="flex-1 py-3.5 bg-red-600 hover:bg-red-500 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all shadow-lg shadow-red-900/20 cursor-pointer"
+              >
+                Remove
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -370,12 +573,10 @@ const WatchlistPage = ({ user }) => {
               setSearchResults([]);
             }}
           />
-
           <div className="bg-gray-900 border border-white/10 w-full max-w-md rounded-[2.5rem] p-8 relative z-10 max-h-[80vh] flex flex-col">
             <h2 className="text-2xl font-black mb-6 text-white uppercase tracking-tighter">
               Add to {selectedList?.name}
             </h2>
-
             <input
               type="text"
               autoFocus
@@ -384,13 +585,12 @@ const WatchlistPage = ({ user }) => {
               value={searchTerm}
               onChange={handleSearchMovie}
             />
-
             <div className="overflow-y-auto flex-1 pr-2 custom-scrollbar space-y-2">
               {searchResults.map((movie) => (
                 <button
                   key={movie.id}
                   onClick={() => addMovieToList(movie)}
-                  className="w-full flex items-center gap-4 p-2 hover:bg-white/5 rounded-2xl transition-all text-left group"
+                  className="w-full flex items-center gap-4 p-2 hover:bg-white/5 rounded-2xl transition-all text-left group cursor-pointer"
                 >
                   <img
                     src={`https://image.tmdb.org/t/p/w92${movie.poster_path}`}

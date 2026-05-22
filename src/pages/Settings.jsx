@@ -3,13 +3,21 @@ import { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
 import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
-import { Lock, Settings as SettingsIcon, AlertOctagon } from "lucide-react";
+import {
+  Lock,
+  Settings as SettingsIcon,
+  AlertOctagon,
+  Loader2,
+} from "lucide-react";
 
 const Settings = ({ user }) => {
   const [nickname, setNickname] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
+
+  // BAGONG STATE: Trigger para sa Custom Danger Zone Confirmation Modal
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
 
   useEffect(() => {
     const fetchCurrentNickname = async () => {
@@ -37,53 +45,39 @@ const Settings = ({ user }) => {
 
     try {
       const docRef = doc(db, "users", user.uid);
-      await updateDoc(docRef, { 
+      await updateDoc(docRef, {
         displayName: nickname.trim(),
       });
-
-      setMessage({
-        type: "success",
-        text: "Vibe check passed! Nickname updated successfully. 🎉",
-      });
+      setMessage({ type: "success", text: "Nickname updated dynamically! 🔄" });
     } catch (error) {
       console.error("Error updating nickname:", error);
-      setMessage({
-        type: "error",
-        text: "Oops! Something went wrong. Try again.",
-      });
+      setMessage({ type: "error", text: "Failed to alter nickname context." });
     } finally {
       setIsSaving(false);
     }
   };
 
-  // NEW: DEACTIVATE ACCOUNT FUNCTION
-  const handleDeactivateAccount = async () => {
+  // BAGONG LOGIC: Ito ang tatawagin ng Confirm button sa loob ng custom modal
+  const handleExecuteDeactivation = async () => {
     if (!user) return;
 
-    const confirmAction = window.confirm(
-      "⚠️ WARNING: Are you sure you want to deactivate your account? This will permanently wipe your profile data from Movie Vibe. This action cannot be undone!",
-    );
-
-    if (!confirmAction) return;
-
     setIsDeactivating(true);
+    setShowDeactivateModal(false); // Isara ang modal habang nagpo-process ang thread
+    setMessage({ type: "", text: "" });
+
     try {
-      // 1. Burahin ang data sa Firestore database
+      // 1. Burahin ang profile document sa Firestore database asset pipeline
       const docRef = doc(db, "users", user.uid);
       await deleteDoc(docRef);
 
-      // 2. I-logout ang user gamit ang Firebase Auth
+      // 2. I-sign out ang active session logs sa client identity terminal
       await signOut(auth);
-
-      alert(
-        "Your account data has been wiped successfully. Safe travels, Viber! 🚀",
-      );
     } catch (error) {
-      console.error("Error wiping user data:", error);
-      alert(
-        "Failed to deactivate account. Please try logging out and logging back in before trying again.",
-      );
-    } finally {
+      console.error("Error deactivating account:", error);
+      setMessage({
+        type: "error",
+        text: "Error deactivating account profile architecture.",
+      });
       setIsDeactivating(false);
     }
   };
@@ -95,112 +89,179 @@ const Settings = ({ user }) => {
           <Lock className="w-6 h-6 animate-pulse" />
         </div>
         <h3 className="text-lg font-black uppercase tracking-wider text-white">
-          Please Log In First
+          Access Restricted
         </h3>
         <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
-          You need to be logged in to view and manage your settings.
+          Please log in to manage your core configuration parameters and network
+          settings.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#080d17] text-white p-6 md:p-12 max-w-2xl">
-      {/* HEADER */}
-      <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-black uppercase tracking-wider text-white flex items-center gap-3">
-          <SettingsIcon className="w-7 h-7 md:w-8 md:h-8 text-gray-400 stroke-[2.5]" />
-          App Settings
-        </h1>
-        <p className="text-xs text-gray-500 mt-1">
-          Manage your identity and configuration on Movie Vibe.
-        </p>
+    <div className="p-4 md:p-10 max-w-3xl mx-auto space-y-8 relative">
+      {/* HEADER SECTION */}
+      <div className="flex items-center gap-4">
+        <div className="w-2.5 h-10 bg-blue-500 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+        <div>
+          <h1 className="text-3xl lg:text-4xl font-black text-white uppercase italic tracking-tighter flex items-center gap-2">
+            <SettingsIcon className="w-8 h-8 text-blue-500 animate-[spin_4s_linear_infinite]" />
+            Control Center
+          </h1>
+          <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-1">
+            System Configuration & Account Preference Nodes
+          </p>
+        </div>
       </div>
 
-      <div className="space-y-6">
-        {/* CARD 1: ACCOUNT PROFILE */}
-        <div className="bg-[#0d1527] border border-white/5 rounded-[2rem] p-6 md:p-8 shadow-xl space-y-6">
-          <div>
-            <h2 className="text-md font-bold text-gray-200 uppercase tracking-wide mb-1">
-              Change Nickname
-            </h2>
-            <p className="text-xs text-gray-400">
-              This controls your displayed name across the Newsfeed, Posts, and
-              Profile Stalk mode.
-            </p>
-          </div>
-
-          {/* FEEDBACK MESSAGE */}
-          {message.text && (
-            <div
-              className={`p-4 rounded-xl text-xs font-bold transition-all ${
-                message.type === "success"
-                  ? "bg-green-500/10 border border-green-500/20 text-green-400"
-                  : "bg-red-500/10 border border-red-500/20 text-red-400"
-              }`}
-            >
+      {/* FEEDBACK FLOATING BANNER */}
+      {message.text && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[110] animate-in fade-in slide-in-from-top-4 duration-300 w-full max-w-sm px-4">
+          <div
+            className={`px-4 py-3 rounded-2xl border backdrop-blur-md flex items-center justify-center gap-2.5 shadow-2xl ${
+              message.type === "success"
+                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                : "bg-red-500/10 border-red-500/20 text-red-400"
+            }`}
+          >
+            <span className="text-xs">
+              {message.type === "success" ? "✨" : "⚠️"}
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-wider text-center">
               {message.text}
-            </div>
-          )}
+            </span>
+          </div>
+        </div>
+      )}
 
-          {/* FORM */}
-          <form onSubmit={handleUpdateNickname} className="space-y-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1">
-                Your Current Display Name
-              </label>
-              <input
-                type="text"
-                required
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                placeholder="Enter new nickname..."
-                maxLength={20}
-                className="w-full px-4 py-3.5 bg-white/5 border border-white/5 focus:border-blue-500/30 rounded-xl text-white text-sm placeholder-gray-600 focus:outline-none font-bold transition-all"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSaving || !nickname.trim()}
-              className="px-6 py-3.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-white rounded-xl font-black uppercase tracking-wider text-xs transition-all shadow-lg shadow-blue-600/10 w-full sm:w-auto"
-            >
-              {isSaving ? "Updating Name..." : "Save Changes"}
-            </button>
-          </form>
+      {/* ACCOUNT SETTINGS FORM CONTAINER */}
+      <div className="bg-[#0f172a] border border-white/10 rounded-[2.5rem] p-6 md:p-8 shadow-xl space-y-6">
+        <div>
+          <h2 className="text-lg font-black text-white uppercase tracking-wide mb-1">
+            Profile Preferences
+          </h2>
+          <p className="text-xs text-gray-500 font-medium">
+            Update your public alias inside the application pipeline.
+          </p>
         </div>
 
-        {/* CARD 2: DANGER ZONE (DEACTIVATE) */}
-        <div className="bg-[#0d1527] border border-red-500/10 rounded-[2rem] p-6 md:p-8 shadow-xl space-y-4">
-          <div>
-            <h2 className="text-md font-bold text-red-400 uppercase tracking-wide mb-1 flex items-center gap-2">
-              <AlertOctagon className="w-4 h-4 text-red-400 stroke-[2.5] animate-pulse" />
-              Danger Zone
-            </h2>
-            <p className="text-xs text-gray-400">
-              Actions here are irreversible. Be extremely careful.
-            </p>
+        <form onSubmit={handleUpdateNickname} className="space-y-4">
+          <div className="flex flex-col space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-wider text-gray-400 pl-1">
+              Public Nickname
+            </label>
+            <input
+              type="text"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder="Enter your new custom alias..."
+              className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-blue-500 transition-all font-medium"
+              disabled={isSaving || isDeactivating}
+            />
           </div>
 
-          <div className="pt-2 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-bold text-white">Deactivate Account</p>
-              <p className="text-xs text-gray-500">
-                Permanently delete your user document and preferences from the
-                app.
+          <button
+            type="submit"
+            disabled={isSaving || !nickname.trim() || isDeactivating}
+            className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-3.5 rounded-2xl font-black uppercase tracking-wider text-xs transition-all disabled:bg-gray-800 disabled:text-gray-500 disabled:scale-100 flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Syncing Parameters...
+              </>
+            ) : (
+              "Save Modifications"
+            )}
+          </button>
+        </form>
+      </div>
+
+      {/* DANGER ZONE CONTAINER */}
+      <div className="bg-red-950/10 border border-red-500/10 rounded-[2.5rem] p-6 md:p-8 shadow-xl space-y-4">
+        <div>
+          <h2 className="text-md font-bold text-red-400 uppercase tracking-wide mb-1 flex items-center gap-2">
+            <AlertOctagon className="w-4 h-4 text-red-400 stroke-[2.5] animate-pulse" />
+            Danger Zone
+          </h2>
+          <p className="text-xs text-gray-400">
+            Actions here are irreversible. Be extremely careful.
+          </p>
+        </div>
+
+        <div className="pt-2 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-bold text-white">Deactivate Account</p>
+            <p className="text-xs text-gray-500">
+              Permanently delete your user document and preferences from the
+              app.
+            </p>
+          </div>
+          <button
+            type="button"
+            // BINAGO: Sa halip na window.confirm, bubuksan nito ang state modal window natin
+            onClick={() => setShowDeactivateModal(true)}
+            disabled={isDeactivating || isSaving}
+            className="px-5 py-3 bg-red-600/10 hover:bg-red-600 border border-red-500/20 hover:border-red-600 text-red-400 hover:text-white disabled:bg-gray-800 disabled:text-gray-500 rounded-xl font-black uppercase tracking-wider text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            {isDeactivating ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Deactivating...
+              </>
+            ) : (
+              "Deactivate Account"
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* ========================================================= */}
+      {/* GLOBAL MODAL: CUSTOM ACCOUNT DEACTIVATION WINDOW */}
+      {/* ========================================================= */}
+      {showDeactivateModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+          <div className="bg-[#0e1420] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            {/* Warning Avatar Badge */}
+            <div className="w-12 h-12 bg-red-600/10 rounded-full flex items-center justify-center text-red-500 mx-auto border border-red-500/20">
+              <AlertOctagon className="w-5 h-5 stroke-[2.5] animate-bounce" />
+            </div>
+
+            {/* Modal Body Copy */}
+            <div className="space-y-1.5">
+              <h3 className="text-sm font-black uppercase italic tracking-wider text-white">
+                Deactivate Account?
+              </h3>
+              <p className="text-xs text-gray-400 font-medium leading-relaxed px-4">
+                Sigurado ka ba? Permanenteng mabubura ang profile mo, mga
+                settings, at pati ang iyong watchlists.{" "}
+                <span className="text-red-400 font-bold">
+                  Hindi na ito pwedeng bawiin o i-undo.
+                </span>
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleDeactivateAccount}
-              disabled={isDeactivating}
-              className="px-5 py-3 bg-red-600/10 hover:bg-red-600 border border-red-500/20 hover:border-red-600 text-red-400 hover:text-white disabled:bg-gray-800 disabled:text-gray-500 rounded-xl font-black uppercase tracking-wider text-xs transition-all duration-200 shrink-0"
-            >
-              {isDeactivating ? "Wiping Data..." : "Deactivate"}
-            </button>
+
+            {/* Action Controller Buttons */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDeactivateModal(false)}
+                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all cursor-pointer border border-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteDeactivation}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all shadow-lg shadow-red-900/30 cursor-pointer"
+              >
+                Deactivate
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
