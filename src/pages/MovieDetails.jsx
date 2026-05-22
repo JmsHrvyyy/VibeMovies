@@ -179,12 +179,12 @@ const MovieDetails = ({ user }) => {
     setIsModalOpen(false);
   };
 
-  if (!details)
-    return (
-      <div className="min-h-screen bg-[#080d17] flex items-center justify-center text-blue-500 font-black italic uppercase tracking-widest">
-        Loading Vibe...
-      </div>
-    );
+  // Hanapin ang official YouTube Trailer o Teaser mula sa response ng api data mo
+  const trailerVideo = details.videos?.results?.find(
+    (vid) =>
+      vid.site === "YouTube" &&
+      (vid.type === "Trailer" || vid.type === "Teaser"),
+  );
 
   return (
     <div className="min-h-screen bg-[#080d17] text-white p-6 md:p-12">
@@ -213,9 +213,7 @@ const MovieDetails = ({ user }) => {
               <button
                 onClick={() => {
                   if (!user) {
-                    alert(
-                      "Please Login First!",
-                    );
+                    alert("Please Login First!");
                     return;
                   }
                   setIsModalOpen(true);
@@ -317,6 +315,25 @@ const MovieDetails = ({ user }) => {
                   "{details.overview}"
                 </p>
               </div>
+
+              {/* ✅ ADDED SECTION: OFFICIAL TRAILER VIDEO (MATAPOS NG OVERVIEW) */}
+              {trailerVideo && (
+                <div className="mt-8 mb-12 space-y-4">
+                  <h3 className="text-white font-black uppercase italic tracking-widest text-sm flex items-center gap-3">
+                    <span className="w-6 h-1 bg-red-600 rounded-full shadow-[0_0_10px_rgba(220,38,38,0.5)]" />
+                    Official Trailer
+                  </h3>
+                  <div className="w-full aspect-video rounded-[2.5rem] overflow-hidden border border-white/5 shadow-2xl bg-black/40">
+                    <iframe
+                      src={`https://www.youtube.com/embed/${trailerVideo.key}?rel=0&modestbranding=1`}
+                      title="Official Trailer"
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    ></iframe>
+                  </div>
+                </div>
+              )}
 
               {/* TOP CAST SECTION */}
               <div className="space-y-8">
