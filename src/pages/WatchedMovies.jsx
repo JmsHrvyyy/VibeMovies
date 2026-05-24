@@ -9,27 +9,23 @@ const WatchedMovies = ({ user }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+    if (!user || !user.uid) return;
 
-    // Kinukuha natin ang buong listahan ng napanood na pelikula, naka-sort sa pinakabagong add
-    const watchedRef = collection(db, "users", user.uid, "watchedMovies");
-    const q = query(watchedRef, orderBy("watchedAt", "desc"));
+    const q = query(
+      collection(db, "users", user.uid, "watchedMovies"),
+      orderBy("createdAt", "desc"),
+    );
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const movies = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setWatchedList(movies);
+        setWatchedList(
+          snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+        );
         setLoading(false);
       },
       (error) => {
-        console.error("Error fetching watched movies:", error);
+        console.warn("Watched movies stream suppressed safely:", error.message);
         setLoading(false);
       },
     );
@@ -47,25 +43,12 @@ const WatchedMovies = ({ user }) => {
           Please Log In First!
         </h3>
         <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
-          You need to be logged in to view your watched movies. Join the community and start building your cinema history!
+          You need to be logged in to view your watched movies. Join the
+          community and start building your cinema history!
         </p>
       </div>
     );
   }
-
-  if (!user) {
-  return (
-    <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
-      <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mb-4 shadow-[0_0_30px_rgba(37,99,235,0.1)]">
-        <Lock className="w-6 h-6 animate-pulse" />
-      </div>
-      <h3 className="text-lg font-black uppercase tracking-wider text-white">Please Log In First</h3>
-      <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
-        You need to be logged in to view your watched movies. Join the community and start building your cinema history!
-      </p>
-    </div>
-  );
-}
 
   if (loading) {
     return (
@@ -76,11 +59,12 @@ const WatchedMovies = ({ user }) => {
   }
 
   return (
-    <div className="min-h-screen bg-[#080d17] text-white px-6 py-10 lg:px-16 lg:py-16">
+    // ✅ UI LAYOUT FIX: Pinalitan ang malalaking padding classes ng 'pt-6 lg:pt-8 pb-16' para umakyat ang content area
+    <div className="w-full bg-[#080d17] text-white px-6 md:px-10 pt-6 lg:pt-8 pb-16 max-w-[1600px] mx-auto">
       {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-12">
+      {/* ✅ UI LAYOUT FIX: Binabaan ang margin bottom ('mb-8') mula 'mb-12' para mas dikit at compact ang upper shell view */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
-          {/* Neon Green Accent Pill */}
           <div className="w-2.5 h-10 bg-green-500 rounded-full shadow-[0_0_15px_rgba(34,197,94,0.5)]" />
           <div>
             <h1 className="text-3xl lg:text-4xl font-black uppercase italic tracking-tighter">
@@ -92,7 +76,6 @@ const WatchedMovies = ({ user }) => {
           </div>
         </div>
 
-        {/* Counter Badge */}
         <div className="bg-green-500/10 border border-green-500/20 px-6 py-3 rounded-2xl flex items-center gap-3 self-start md:self-auto">
           <span className="text-[10px] font-black uppercase text-green-500 tracking-widest">
             Total Collection:
@@ -116,7 +99,8 @@ const WatchedMovies = ({ user }) => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+        // ✅ UI LAYOUT FIX: Dinagdagan ng 'gap-6 md:gap-8' para maging malinis at pantay ang grid gap sa screen scale mo
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 md:gap-8">
           {watchedList.map((movie) => (
             <MovieCard
               key={movie.id}
@@ -124,9 +108,9 @@ const WatchedMovies = ({ user }) => {
                 id: movie.id,
                 title: movie.title,
                 poster_path: movie.poster_path,
-                media_type: movie.type || "movie", // Gumagamit ng fallback kung tv or movie
+                media_type: movie.type || "movie",
               }}
-              isWatched={true} // Dahil galing sila sa listahang ito, automatic true na agad ito
+              isWatched={true}
             />
           ))}
         </div>

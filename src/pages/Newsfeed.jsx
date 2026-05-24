@@ -31,8 +31,34 @@ import {
   Trash2,
 } from "lucide-react";
 
+const triggerNotification = async (targetUserId, currentUser, type, postId) => {
+  if (!targetUserId || targetUserId === currentUser.uid) return;
+
+  try {
+    // Kukunin ang pinakabagong nickname mula sa database profile doc
+    const senderDocRef = doc(db, "users", currentUser.uid);
+    const senderDocSnap = await getDoc(senderDocRef);
+    
+    let activeName = currentUser.displayName || "Someone";
+    if (senderDocSnap.exists() && senderDocSnap.data().displayName) {
+      activeName = senderDocSnap.data().displayName;
+    }
+
+    await addDoc(collection(db, "users", targetUserId, "notifications"), {
+      senderId: currentUser.uid,
+      senderName: activeName, // 🔥 Custom nickname dynamic binding
+      type: type,
+      postId: postId,
+      isRead: false,
+      createdAt: Date.now(),
+    });
+  } catch (error) {
+    console.error("Failed sending notification document:", error);
+  }
+};
+
 // =========================================================
-// MICRO COMPONENT: LIVE CUSTOM NICKNAME DISPLAY (NASA LABAS)
+// MICRO COMPONENT: LIVE CUSTOM NICKNAME DISPLAY
 // =========================================================
 const UsernameDisplay = ({ userId, fallbackName, className }) => {
   const [displayName, setDisplayName] = useState(fallbackName || "Anonymous");
@@ -57,7 +83,7 @@ const UsernameDisplay = ({ userId, fallbackName, className }) => {
   return (
     <button
       onClick={(e) => {
-        e.stopPropagation(); // Iwasan ang pag-trigger ng click ng parent profile card
+        e.stopPropagation();
         navigate(`/profile/${userId}`);
       }}
       className={`${className} hover:underline text-left cursor-pointer`}
@@ -69,7 +95,7 @@ const UsernameDisplay = ({ userId, fallbackName, className }) => {
 };
 
 // =========================================================
-// MINI SUB-COMPONENT: INLINE MOVIE TAG BADGE (CLICKABLE FOR DETAILS)
+// MINI SUB-COMPONENT: INLINE MOVIE TAG BADGE
 // =========================================================
 const AttachedMovieBadge = ({ movie }) => {
   const navigate = useNavigate();
@@ -108,7 +134,6 @@ const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
   const [replyText, setReplyText] = useState("");
   const [replies, setReplies] = useState([]);
 
-  // Reply Movie Tag States
   const [replyMovieQuery, setReplyMovieQuery] = useState("");
   const [replyMovieResults, setReplyMovieResults] = useState([]);
   const [selectedReplyMovie, setSelectedReplyMovie] = useState(null);
@@ -156,12 +181,21 @@ const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
           ? arrayRemove(currentUser.uid)
           : arrayUnion(currentUser.uid),
       });
+
+      if (!hasLiked) {
+        await triggerNotification(
+          comment.userId,
+          currentUser,
+          "like_comment",
+          post.id,
+        );
+      }
     } catch (err) {
       console.error("Error liking comment:", err);
     }
   };
 
-  const handleReplyLike = async (replyId, currentLikes = []) => {
+  const handleReplyLike = async (replyId, replyUserId, currentLikes = []) => {
     if (!currentUser) return alert("Please login to react!");
     const replyRef = doc(
       db,
@@ -180,6 +214,15 @@ const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
           ? arrayRemove(currentUser.uid)
           : arrayUnion(currentUser.uid),
       });
+
+      if (!hasLiked) {
+        await triggerNotification(
+          replyUserId,
+          currentUser,
+          "like_reply",
+          post.id,
+        );
+      }
     } catch (err) {
       console.error("Error liking reply:", err);
     }
@@ -214,6 +257,13 @@ const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
         replyData,
       );
 
+      await triggerNotification(
+        comment.userId,
+        currentUser,
+        "reply_comment",
+        post.id,
+      );
+
       setReplyText("");
       setSelectedReplyMovie(null);
       setReplyMovieQuery("");
@@ -223,56 +273,16 @@ const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
     }
   };
 
-  const handleDeleteComment = async () => {
-    if (
-      !window.confirm("Sigurado ka bang gusto mong burahin ang komentong ito?")
-    )
-      return;
-
-    try {
-      const commentDocRef = doc(db, "posts", post.id, "comments", comment.id);
-      await deleteDoc(commentDocRef);
-    } catch (err) {
-      console.error("Error deleting comment:", err);
-      alert("Hindi nabura ang komento.");
-    }
-  };
-
-  const handleDeleteReply = async (replyId) => {
-    if (
-      !window.confirm("Sigurado ka bang gusto mong burahin ang reply na ito?")
-    )
-      return;
-
-    try {
-      const replyRef = doc(
-        db,
-        "posts",
-        post.id,
-        "comments",
-        comment.id,
-        "replies",
-        replyId,
-      );
-      await deleteDoc(replyRef);
-    } catch (err) {
-      console.error("Error deleting reply:", err);
-      alert("Hindi nabura ang reply.");
-    }
-  };
-
   const isCommentLikedByMe = comment.likes?.includes(currentUser?.uid);
 
   return (
     <div className="bg-white/[0.02] border border-white/5 p-3 rounded-2xl space-y-2">
       <div className="flex items-center justify-between w-full">
-        {/* KALIWANG BAHAGI: Avatar at Pangalan */}
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => navigate(`/profile/${comment.userId}`)}
             className="flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
-            title={`View profile`}
           >
             {comment.userPhoto ? (
               <img
@@ -294,7 +304,6 @@ const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
           />
         </div>
 
-        {/* KANANG BAHAGI: Date Tag at Trash Icon */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-[7px] font-bold text-gray-600 uppercase tracking-tight">
             {comment.createdAt
@@ -313,7 +322,6 @@ const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
                 })
               }
               className="text-gray-600 hover:text-red-500 transition-colors p-1"
-              title="Delete Comment"
             >
               <Trash2 className="w-3 h-3" />
             </button>
@@ -356,14 +364,12 @@ const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
                 key={reply.id}
                 className="bg-white/[0.01] p-2.5 rounded-xl border border-white/[0.02] space-y-1.5"
               >
-                {/* REPLY HEADER: Name sa kaliwa, Date sa kanan */}
                 <div className="flex items-center justify-between w-full">
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => navigate(`/profile/${reply.userId}`)}
                       className="flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
-                      title={`View profile`}
                     >
                       {reply.userPhoto ? (
                         <img
@@ -394,7 +400,6 @@ const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
                   </span>
                 </div>
 
-                {/* REPLY TEXT CONTENT */}
                 <div className="pl-5">
                   {reply.text && (
                     <p className="text-[11px] text-gray-300 font-medium">
@@ -404,10 +409,11 @@ const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
                   {reply.movie && <AttachedMovieBadge movie={reply.movie} />}
                 </div>
 
-                {/* REPLY ACTIONS PANEL */}
                 <div className="pl-5 pt-0.5 flex items-center justify-between w-full">
                   <button
-                    onClick={() => handleReplyLike(reply.id, reply.likes)}
+                    onClick={() =>
+                      handleReplyLike(reply.id, reply.userId, reply.likes)
+                    }
                     className={`flex items-center gap-1 text-[8px] font-black uppercase tracking-widest transition-colors ${
                       isReplyLikedByMe
                         ? "text-rose-500 hover:text-rose-400"
@@ -435,7 +441,6 @@ const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
                         })
                       }
                       className="text-gray-600 hover:text-red-500 transition-colors p-0.5"
-                      title="Delete Reply"
                     >
                       <Trash2 className="w-2.5 h-2.5" />
                     </button>
@@ -526,7 +531,7 @@ const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
 };
 
 // =========================================================
-// SUB-COMPONENT: REUSABLE POST CARD WITH WATCHLIST, LIKES & COMMENTS
+// SUB-COMPONENT: REUSABLE POST CARD
 // =========================================================
 const PostCard = ({ post, currentUser, showToast, setItemToDelete }) => {
   const navigate = useNavigate();
@@ -536,12 +541,10 @@ const PostCard = ({ post, currentUser, showToast, setItemToDelete }) => {
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState([]);
 
-  // Copy Watchlist & Custom Rename workflow states
   const [isCopying, setIsCopying] = useState(false);
   const [clonedListName, setClonedListName] = useState("");
   const [isCopySuccess, setIsCopySuccess] = useState(false);
 
-  // Comment Specific Movie Search States
   const [commentMovieQuery, setCommentMovieQuery] = useState("");
   const [commentMovieResults, setCommentMovieResults] = useState([]);
   const [selectedCommentMovie, setSelectedCommentMovie] = useState(null);
@@ -603,6 +606,16 @@ const PostCard = ({ post, currentUser, showToast, setItemToDelete }) => {
           ? arrayRemove(currentUser.uid)
           : arrayUnion(currentUser.uid),
       });
+
+      if (!hasLiked) {
+        // 🔥 GINAMIT ANG post.userId PARA SIGURADONG MAKUHA ANG VALUABLE FIELD NA HINDI UNDEFINED
+        await triggerNotification(
+          post.userId,
+          currentUser,
+          "like_post",
+          post.id,
+        );
+      }
     } catch (err) {
       console.error("Error liking post:", err);
     }
@@ -633,6 +646,15 @@ const PostCard = ({ post, currentUser, showToast, setItemToDelete }) => {
       }
 
       await addDoc(collection(db, "posts", post.id, "comments"), commentData);
+
+      // 🔥 GINAMIT ANG post.userId DITO
+      await triggerNotification(
+        post.userId,
+        currentUser,
+        "comment_post",
+        post.id,
+      );
+
       setCommentText("");
       setSelectedCommentMovie(null);
       setCommentMovieQuery("");
@@ -669,7 +691,7 @@ const PostCard = ({ post, currentUser, showToast, setItemToDelete }) => {
 
   return (
     <div className="bg-white/[0.01] border border-white/5 rounded-[2.5rem] p-6 space-y-4 shadow-md hover:border-white/10 transition-all">
-      {/* USER PROFILE HEADER */}
+      {/* FIXED PROFILE LINK HEADER - PALITAN ANG post.uid NG post.userId */}
       <div
         onClick={() => navigate(`/profile/${post.userId}`)}
         className="flex items-center gap-3 cursor-pointer group"
@@ -699,7 +721,6 @@ const PostCard = ({ post, currentUser, showToast, setItemToDelete }) => {
         </div>
       </div>
 
-      {/* POST CONTENT TEXT */}
       {post.content && (
         <div className="space-y-1">
           <p className="text-gray-300 text-sm font-medium leading-relaxed whitespace-pre-wrap">
@@ -716,7 +737,6 @@ const PostCard = ({ post, currentUser, showToast, setItemToDelete }) => {
         </div>
       )}
 
-      {/* WATCHLIST / MOVIES GRID LINK CARD */}
       {post.postType === "watchlist" ? (
         <div className="pt-2 border-t border-white/5 mt-4">
           <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
@@ -773,7 +793,6 @@ const PostCard = ({ post, currentUser, showToast, setItemToDelete }) => {
         )
       )}
 
-      {/* VIEW MORE BOX */}
       {hasMoreToSee && (
         <div className="pt-2 flex justify-center">
           <button
@@ -785,7 +804,6 @@ const PostCard = ({ post, currentUser, showToast, setItemToDelete }) => {
         </div>
       )}
 
-      {/* CORE INTERACTIONS PANEL */}
       <div className="flex items-center gap-2 pt-2 border-t border-white/5 mt-2">
         <button
           onClick={handleLike}
@@ -820,7 +838,6 @@ const PostCard = ({ post, currentUser, showToast, setItemToDelete }) => {
         </button>
       </div>
 
-      {/* DISCUSS DRAWER SYSTEM */}
       {showComments && (
         <div className="space-y-4 pt-4 border-t border-white/5 animate-in fade-in duration-200">
           <div className="space-y-3 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
@@ -913,7 +930,6 @@ const PostCard = ({ post, currentUser, showToast, setItemToDelete }) => {
         </div>
       )}
 
-      {/* POPUP MODAL FOR SHARED WATCHLIST */}
       {isListModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div
@@ -1027,7 +1043,6 @@ const Newsfeed = ({ user }) => {
   const [selectedWatchlist, setSelectedWatchlist] = useState(null);
 
   const [isComposerOpen, setIsComposerOpen] = useState(false);
-
   const [itemToDelete, setItemToDelete] = useState(null);
 
   const [toast, setToast] = useState({
@@ -1036,21 +1051,13 @@ const Newsfeed = ({ user }) => {
     type: "info",
   });
 
-  // Hanapin at i-update itong function na ito sa iyong file:
   const showToast = (message, type = "success") => {
-    setToast({
-      show: true,
-      message: message,
-      type: type,
-    });
-
-    // Awtomatikong itago ang banner pagkalipas ng 3 segundo
+    setToast({ show: true, message: message, type: type });
     setTimeout(() => {
       setToast({ show: false, message: "", type: "info" });
     }, 3000);
   };
 
-  // LAHAT NG EFFECT AT HOOKS AY NASA PINAKATAAS DAPAT BAGO ANG KAHIT ANONG CONDITIONAL RETURNS!
   useEffect(() => {
     const postsRef = collection(db, "posts");
     const q = query(postsRef, orderBy("createdAt", "desc"));
@@ -1131,6 +1138,7 @@ const Newsfeed = ({ user }) => {
     }
 
     try {
+      // DITO: Ginagarantiyahan na nating userId ang field name para solid
       const baseData = {
         userId: user.uid,
         userName: user.displayName || "Anonymous Viber",
@@ -1155,7 +1163,6 @@ const Newsfeed = ({ user }) => {
       }
 
       await addDoc(collection(db, "posts"), { ...baseData });
-
       showToast("Vibe context added to timeline pipeline! 🚀", "success");
 
       setText("");
@@ -1175,78 +1182,55 @@ const Newsfeed = ({ user }) => {
       if (itemToDelete.type === "post") {
         await deleteDoc(doc(db, "posts", itemToDelete.postId));
       } else if (itemToDelete.type === "comment") {
-        const commentDocRef = doc(
-          db,
-          "posts",
-          itemToDelete.postId,
-          "comments",
-          itemToDelete.commentId,
+        await deleteDoc(
+          doc(
+            db,
+            "posts",
+            itemToDelete.postId,
+            "comments",
+            itemToDelete.commentId,
+          ),
         );
-        await deleteDoc(commentDocRef);
       } else if (itemToDelete.type === "reply") {
-        const replyRef = doc(
-          db,
-          "posts",
-          itemToDelete.postId,
-          "comments",
-          itemToDelete.commentId,
-          "replies",
-          itemToDelete.replyId,
+        await deleteDoc(
+          doc(
+            db,
+            "posts",
+            itemToDelete.postId,
+            "comments",
+            itemToDelete.commentId,
+            "replies",
+            itemToDelete.replyId,
+          ),
         );
-        await deleteDoc(replyRef);
       }
 
-      // 1. I-set ang tagumpay na mensahe sa banner
-      setToast({
-        show: true,
-        message: `Successfully deleted ${itemToDelete.type}!`,
-        type: "success",
-      });
-
-      // 2. Awtomatikong itago ang banner pagkalipas ng 3 segundo
-      setTimeout(() => {
-        setToast({ show: false, message: "", type: "info" });
-      }, 3000);
-
-      setItemToDelete(null); // Isara ang modal
+      showToast(`Successfully deleted ${itemToDelete.type}!`);
+      setItemToDelete(null);
     } catch (err) {
       console.error("Error executing delete:", err);
-
-      // Banner para sa error tracking
-      setToast({
-        show: true,
-        message: `Failed to delete ${itemToDelete.type}.`,
-        type: "error",
-      });
+      showToast(`Failed to delete ${itemToDelete.type}.`, "error");
     }
   };
 
-  // =========================================================
-  // DITO INTERNALLY ANG CONDITIONAL RETURN CHECK NI REACT
-  // =========================================================
   if (!user) {
     return (
       <div className="min-h-screen bg-[#080d17] flex flex-col items-center justify-center text-center p-6">
-        <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mb-4 shadow-[0_0_30px_rgba(37,99,235,0.1)]">
+        <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center text-blue-400 mb-4">
           <Lock className="w-6 h-6 animate-pulse" />
         </div>
         <h3 className="text-lg font-black uppercase tracking-wider text-white">
           Please Log In First
         </h3>
-        <p className="text-gray-500 text-xs mt-2 max-w-xs font-medium">
-          You need to be logged in to view and interact with the Vibe Feed. Join
-          the community and start sharing your movie vibes!
-        </p>
       </div>
     );
   }
 
-  // PAG NAKALAP NA ANG USER, ITO NAMAN ANG TATAKBO
   return (
     <div className="min-h-screen bg-[#080d17] text-white px-4 py-10 md:px-16 flex flex-col items-center">
       <div className="w-full max-w-2xl space-y-6">
         <div className="flex items-center gap-4 mb-2">
-          <div className="w-2.5 h-10 bg-blue-600 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.5)]" />
+          <div className="w-2.5 h-10 bg-blue-600 rounded-full" />
           <h1 className="text-3xl font-black uppercase italic tracking-tighter">
             Vibe Feed
           </h1>
@@ -1257,37 +1241,36 @@ const Newsfeed = ({ user }) => {
             {user?.photoURL ? (
               <img
                 src={user.photoURL}
-                className="w-10 h-10 rounded-full object-cover border border-white/10"
+                className="w-10 h-10 rounded-full object-cover"
                 alt=""
               />
             ) : (
               <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center font-black text-sm text-blue-400">
-                {user?.displayName?.[0]?.toUpperCase() || "V"}
+                {user?.displayName?.[0]?.toUpperCase()}
               </div>
             )}
             <button
               onClick={() => setIsComposerOpen(true)}
               className="flex-1 bg-white/5 hover:bg-white/10 transition-all rounded-full py-3 px-6 text-left text-gray-400 text-xs font-medium border border-white/5"
             >
-              What's on your mind, {user?.displayName?.split(" ")[0] || "Viber"}
-              ? Share a movie...
+              What's on your mind, {user?.displayName?.split(" ")[0]}? Share a
+              movie...
             </button>
           </div>
 
           <button
             onClick={() => navigate("/manage-posts")}
-            className="h-full sm:h-16 w-full sm:w-auto px-6 bg-white/5 hover:bg-blue-600/10 border border-white/5 hover:border-blue-500/20 rounded-[1.5rem] sm:rounded-[2rem] flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 hover:text-blue-400 transition-all shadow-xl py-4 sm:py-0 group"
+            className="h-full sm:h-16 w-full sm:w-auto px-6 bg-white/5 hover:bg-blue-600/10 border border-white/5 hover:border-blue-500/20 rounded-[2rem] flex items-center justify-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 hover:text-blue-400 transition-all shadow-xl py-4 sm:py-0"
           >
-            <Settings className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors" />
-            Manage
+            <Settings className="w-4 h-4" /> Manage
           </button>
         </div>
 
         <div className="space-y-6">
           {posts.length === 0 ? (
-            <div className="text-center py-20 border border-dashed border-white/5 rounded-[3rem] bg-white/[0.005]">
+            <div className="text-center py-20 border border-dashed border-white/5 rounded-[3rem]">
               <p className="text-gray-500 font-black text-sm uppercase italic tracking-widest">
-                The feed is quiet... Be the first to shout!
+                The feed is quiet...
               </p>
             </div>
           ) : (
@@ -1308,7 +1291,7 @@ const Newsfeed = ({ user }) => {
       {isComposerOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-[#0e1626] border border-white/10 w-full max-w-lg rounded-[2.5rem] p-6 space-y-4 shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between border-b border-white/5 pb-3 flex-shrink-0">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
               <h3 className="text-sm font-black uppercase italic tracking-widest text-blue-500">
                 Create Post
               </h3>
@@ -1320,22 +1303,22 @@ const Newsfeed = ({ user }) => {
                   setText("");
                   setComposerTab("tag");
                 }}
-                className="text-gray-500 hover:text-white font-bold text-sm bg-white/5 w-8 h-8 rounded-full flex items-center justify-center"
+                className="text-gray-500 hover:text-white font-bold bg-white/5 w-8 h-8 rounded-full flex items-center justify-center"
               >
                 ✕
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 bg-white/5 p-1 rounded-2xl flex-shrink-0">
+            <div className="grid grid-cols-2 gap-2 bg-white/5 p-1 rounded-2xl">
               <button
                 type="button"
                 onClick={() => {
                   setComposerTab("tag");
                   setSelectedWatchlist(null);
                 }}
-                className={`py-2 text-center text-xs font-black uppercase tracking-wider rounded-xl transition-all ${composerTab === "tag" ? "bg-blue-600 text-white shadow-md" : "text-gray-400 hover:text-white"}`}
+                className={`py-2 text-center text-xs font-black uppercase tracking-wider rounded-xl transition-all ${composerTab === "tag" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"}`}
               >
-                🎬 Tag Film/Show
+                🎬 Tag Film
               </button>
               <button
                 type="button"
@@ -1343,7 +1326,7 @@ const Newsfeed = ({ user }) => {
                   setComposerTab("watchlist");
                   setTaggedMovies([]);
                 }}
-                className={`py-2 text-center text-xs font-black uppercase tracking-wider rounded-xl transition-all ${composerTab === "watchlist" ? "bg-blue-600 text-white shadow-md" : "text-gray-400 hover:text-white"}`}
+                className={`py-2 text-center text-xs font-black uppercase tracking-wider rounded-xl transition-all ${composerTab === "watchlist" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"}`}
               >
                 📂 Share Watchlist
               </button>
@@ -1351,45 +1334,42 @@ const Newsfeed = ({ user }) => {
 
             <form
               onSubmit={handleCreatePost}
-              className="space-y-4 flex-1 flex flex-col min-h-0 overflow-y-auto pr-1 no-scrollbar"
+              className="space-y-4 flex-1 flex flex-col min-h-0 overflow-y-auto no-scrollbar"
             >
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder={
                   composerTab === "watchlist"
-                    ? "Write something about this watchlist folder..."
-                    : "What's on your mind? Share your thoughts or tag a film..."
+                    ? "Write something about this watchlist..."
+                    : "What's on your mind?"
                 }
-                className="w-full bg-transparent text-sm font-medium focus:outline-none placeholder-gray-600 resize-none h-24 flex-shrink-0 custom-scrollbar"
+                className="w-full bg-transparent text-sm font-medium focus:outline-none placeholder-gray-600 resize-none h-24"
                 autoFocus
               />
 
               {composerTab === "tag" && (
-                <div className="space-y-4 flex-shrink-0">
+                <div className="space-y-4">
                   {taggedMovies.length > 0 && (
-                    <div className="pt-2">
-                      <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2">
-                        Selected Media Preview:
-                      </p>
-                      <div className="flex gap-3 overflow-x-auto pb-3 pt-1 no-scrollbar max-w-full">
+                    <div>
+                      <div className="flex gap-3 overflow-x-auto pb-3 pt-1 no-scrollbar">
                         {taggedMovies.map((m) => (
                           <div
                             key={m.id}
-                            className="relative flex-shrink-0 w-24 bg-white/5 border border-white/10 rounded-2xl p-1.5 flex flex-col items-center group shadow-md"
+                            className="relative flex-shrink-0 w-24 bg-white/5 border border-white/10 rounded-2xl p-1.5 flex flex-col items-center"
                           >
                             <img
                               src={`https://image.tmdb.org/t/p/w185${m.poster_path}`}
-                              className="w-full aspect-[2/3] object-cover rounded-xl shadow-inner"
+                              className="w-full aspect-[2/3] object-cover rounded-xl"
                               alt=""
                             />
-                            <p className="text-[9px] font-black uppercase tracking-tight text-gray-300 text-center truncate w-full mt-1.5 px-0.5">
+                            <p className="text-[9px] font-black uppercase tracking-tight text-gray-300 text-center truncate w-full mt-1.5">
                               {m.title || m.name}
                             </p>
                             <button
                               type="button"
                               onClick={() => handleRemoveTag(m.id)}
-                              className="absolute -top-1 -right-1 bg-red-600 hover:bg-red-500 text-white font-bold text-[8px] w-5 h-5 rounded-full flex items-center justify-center shadow-lg border border-[#0e1626]"
+                              className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] w-5 h-5 rounded-full"
                             >
                               ✕
                             </button>
@@ -1399,30 +1379,29 @@ const Newsfeed = ({ user }) => {
                     </div>
                   )}
 
-                  <div className="relative pt-2">
+                  <div className="relative">
                     <input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="🔍 Tag movies or TV shows..."
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-xs focus:outline-none focus:border-blue-500 transition-all text-gray-300"
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-xs focus:outline-none focus:border-blue-500 text-gray-300"
                     />
-
                     {searchResults.length > 0 && (
-                      <div className="absolute left-0 right-0 bottom-full mb-2 bg-[#141f35] border border-white/10 rounded-2xl max-h-48 overflow-y-auto z-50 p-2 space-y-1 no-scrollbar">
+                      <div className="absolute left-0 right-0 bottom-full mb-2 bg-[#141f35] border border-white/10 rounded-2xl max-h-48 overflow-y-auto z-50 p-2 space-y-1">
                         {searchResults.map((movie) => (
                           <button
                             key={movie.id}
                             type="button"
                             onClick={() => handleSelectMovie(movie)}
-                            className="w-full flex items-center gap-3 p-2 hover:bg-white/5 rounded-xl text-left transition-all group"
+                            className="w-full flex items-center gap-3 p-2 hover:bg-white/5 rounded-xl text-left"
                           >
                             <img
                               src={`https://image.tmdb.org/t/p/w92${movie.poster_path}`}
-                              className="w-6 h-9 object-cover rounded shadow-md"
+                              className="w-6 h-9 object-cover rounded"
                               alt=""
                             />
-                            <span className="text-xs font-black uppercase tracking-wide truncate group-hover:text-blue-400 transition-colors">
+                            <span className="text-xs font-black uppercase tracking-wide truncate">
                               {movie.title || movie.name}
                             </span>
                           </button>
@@ -1435,54 +1414,41 @@ const Newsfeed = ({ user }) => {
 
               {composerTab === "watchlist" && (
                 <div className="space-y-3 flex-1 flex flex-col min-h-0">
-                  <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest flex-shrink-0">
-                    {selectedWatchlist
-                      ? "Selected Watchlist Folder:"
-                      : "Choose one of your Watchlist Folders to share:"}
-                  </p>
-
                   {selectedWatchlist ? (
-                    <div className="bg-blue-600/10 border border-blue-500/30 p-4 rounded-2xl flex items-center justify-between shadow-inner animate-in fade-in duration-200 flex-shrink-0">
+                    <div className="bg-blue-600/10 border border-blue-500/30 p-4 rounded-2xl flex items-center justify-between">
                       <div>
-                        <h4 className="text-sm font-black uppercase text-white tracking-wide">
+                        <h4 className="text-sm font-black uppercase text-white">
                           📁 {selectedWatchlist.name}
                         </h4>
-                        <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mt-0.5">
+                        <p className="text-[10px] font-bold text-blue-400 mt-0.5">
                           {selectedWatchlist.movies?.length || 0} movies loaded
-                          inside
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setSelectedWatchlist(null)}
-                        className="bg-white/5 hover:bg-red-600/20 text-gray-400 hover:text-red-400 px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-xl transition-all border border-white/5"
+                        className="text-gray-400 text-[9px] font-black border border-white/5 px-3 py-1.5 rounded-xl"
                       >
-                        Change Folder
+                        Change
                       </button>
                     </div>
                   ) : (
-                    <div className="overflow-y-auto flex-1 border border-white/5 rounded-2xl bg-white/[0.01] p-2 space-y-1.5 custom-scrollbar min-h-[120px]">
-                      {userWatchlists.length === 0 ? (
-                        <p className="text-center text-xs text-gray-600 py-8 font-bold uppercase tracking-wider">
-                          No watchlists found. Go make one first!
-                        </p>
-                      ) : (
-                        userWatchlists.map((list) => (
-                          <button
-                            key={list.id}
-                            type="button"
-                            onClick={() => setSelectedWatchlist(list)}
-                            className="w-full p-3 bg-white/5 hover:bg-blue-600/10 border border-white/5 hover:border-blue-500/20 rounded-xl flex items-center justify-between text-left transition-all group"
-                          >
-                            <span className="text-xs font-black uppercase tracking-wide text-gray-300 group-hover:text-white truncate max-w-[70%]">
-                              📁 {list.name}
-                            </span>
-                            <span className="text-[9px] font-black bg-white/5 group-hover:bg-blue-500/20 px-2 py-0.5 rounded text-gray-500 group-hover:text-blue-400 uppercase tracking-widest">
-                              {list.movies?.length || 0} Films
-                            </span>
-                          </button>
-                        ))
-                      )}
+                    <div className="overflow-y-auto flex-1 border border-white/5 rounded-2xl bg-white/[0.01] p-2 space-y-1.5 min-h-[120px]">
+                      {userWatchlists.map((list) => (
+                        <button
+                          key={list.id}
+                          type="button"
+                          onClick={() => setSelectedWatchlist(list)}
+                          className="w-full p-3 bg-white/5 hover:bg-blue-600/10 border border-white/5 rounded-xl flex items-center justify-between text-left"
+                        >
+                          <span className="text-xs font-black uppercase text-gray-300 truncate max-w-[70%]">
+                            📁 {list.name}
+                          </span>
+                          <span className="text-[9px] font-black bg-white/5 px-2 py-0.5 rounded text-gray-500">
+                            {list.movies?.length || 0} Films
+                          </span>
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -1490,46 +1456,42 @@ const Newsfeed = ({ user }) => {
 
               <button
                 type="submit"
-                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-[1.8rem] font-black uppercase italic tracking-widest text-xs transition-all shadow-lg flex-shrink-0 mt-auto"
+                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-[1.8rem] font-black uppercase tracking-widest text-xs mt-auto"
               >
-                {composerTab === "watchlist"
-                  ? "🚀 Share Folder to Timeline"
-                  : "Post to Timeline"}
+                Post to Timeline
               </button>
             </form>
           </div>
         </div>
       )}
-      {/* CONFIRMATION MODAL FOR DELETION */}
+
+      {/* CONFIRMATION MODAL */}
       {itemToDelete && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-[#0e1420] border border-white/10 p-6 rounded-3xl max-w-sm w-full text-center space-y-4 shadow-2xl">
             <div className="w-12 h-12 bg-red-600/10 rounded-full flex items-center justify-center text-red-500 mx-auto">
               <Trash2 className="w-5 h-5" />
             </div>
-
-            <div className="space-y-1.5">
-              <h3 className="text-sm font-black uppercase italic tracking-wider text-white">
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-wider text-white">
                 Delete this {itemToDelete.type}?
               </h3>
-              <p className="text-xs text-gray-400 font-medium leading-relaxed px-4">
-                Sigurado ka ba? Kapag binura mo ito, permanenteng mawawala ang{" "}
-                {itemToDelete.type === "comment" ? "komento" : "reply"} na ito.
+              <p className="text-xs text-gray-400 mt-1">
+                Sigurado ka ba? Permanenteng mawawala ito.
               </p>
             </div>
-
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setItemToDelete(null)}
-                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all"
+                className="flex-1 py-3 bg-white/5 text-gray-400 rounded-xl text-[10px] font-black uppercase"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleExecuteItemDelete}
-                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-black uppercase tracking-widest text-[10px] transition-all"
+                className="flex-1 py-3 bg-red-600 text-white rounded-xl text-[10px] font-black uppercase"
               >
                 Delete
               </button>
@@ -1537,23 +1499,14 @@ const Newsfeed = ({ user }) => {
           </div>
         </div>
       )}
-      {/* FLOATING NOTIFICATION BANNER - CENTER TOP */}
+
+      {/* TOAST SYSTEM */}
       {toast.show && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[110] animate-in fade-in slide-in-from-top-4 duration-300 w-full max-w-sm px-4">
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[110] w-full max-w-sm px-4">
           <div
-            className={`px-4 py-3 rounded-2xl border backdrop-blur-md flex items-center justify-center gap-2.5 shadow-2xl ${
-              toast.type === "success"
-                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                : "bg-red-500/10 border-red-500/20 text-red-400"
-            }`}
+            className={`px-4 py-3 rounded-2xl border backdrop-blur-md flex items-center justify-center gap-2.5 shadow-2xl ${toast.type === "success" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}
           >
-            {/* Icon base sa status */}
-            {toast.type === "success" ? (
-              <span className="text-xs">✨</span>
-            ) : (
-              <span className="text-xs">⚠️</span>
-            )}
-            <span className="text-[10px] font-black uppercase tracking-wider text-center">
+            <span className="text-[10px] font-black uppercase tracking-wider">
               {toast.message}
             </span>
           </div>

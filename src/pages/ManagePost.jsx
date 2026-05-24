@@ -1,37 +1,68 @@
 import { useEffect, useState } from "react";
-import { db, auth } from "../firebase";
+import { db } from "../firebase";
 import {
   collection,
+  addDoc,
   onSnapshot,
   query,
   where,
   orderBy,
+  serverTimestamp,
   doc,
   updateDoc,
-  deleteDoc,
-  addDoc,
   arrayUnion,
   arrayRemove,
-  serverTimestamp,
+  deleteDoc,
+  getDoc,
 } from "firebase/firestore";
 import { searchMovies } from "../services/api";
-import { useNavigate } from "react-router-dom";
 import MovieCard from "../components/MovieCard";
+import { useNavigate } from "react-router-dom";
 import {
   FolderHeart,
   Clapperboard,
   Heart,
   MessageSquare,
   Film,
-  PencilLine,
   Trash2,
+  ArrowLeft,
+  PencilLine,
   AlertTriangle,
   X,
-  ArrowLeft,
 } from "lucide-react";
 
-import { getDoc } from "firebase/firestore";
+// =========================================================
+// 🚀 PIPELINE TRIGGER: Para mag-sync ang notification records
+// =========================================================
+const triggerNotification = async (targetUserId, currentUser, type, postId) => {
+  if (!targetUserId || targetUserId === currentUser.uid) return;
 
+  try {
+    const senderDocRef = doc(db, "users", currentUser.uid);
+    const senderDocSnap = await getDoc(senderDocRef);
+
+    let activeName = currentUser.displayName || "Someone";
+    if (senderDocSnap.exists() && senderDocSnap.data().displayName) {
+      activeName = senderDocSnap.data().displayName;
+    }
+
+    await addDoc(collection(db, "users", targetUserId, "notifications"), {
+      type,
+      senderId: currentUser.uid,
+      senderName: activeName,
+      senderPhoto: currentUser.photoURL || "",
+      postId,
+      isRead: false,
+      createdAt: serverTimestamp(),
+    });
+  } catch (err) {
+    console.error("Failed to route interaction stream:", err);
+  }
+};
+
+// =========================================================
+// MICRO COMPONENT: LIVE CUSTOM NICKNAME DISPLAY
+// =========================================================
 const UsernameDisplay = ({ userId, fallbackName, className }) => {
   const [displayName, setDisplayName] = useState(fallbackName || "Anonymous");
   const navigate = useNavigate();
@@ -54,7 +85,10 @@ const UsernameDisplay = ({ userId, fallbackName, className }) => {
 
   return (
     <button
-      onClick={() => navigate(`/profile/${userId}`)}
+      onClick={(e) => {
+        e.stopPropagation();
+        navigate(`/profile/${userId}`);
+      }}
       className={`${className} hover:underline text-left cursor-pointer`}
       type="button"
     >
@@ -64,20 +98,21 @@ const UsernameDisplay = ({ userId, fallbackName, className }) => {
 };
 
 // =========================================================
-// MINI SUB-COMPONENT: INLINE MOVIE TAG BADGE FOR DISCUSSIONS
+// MINI SUB-COMPONENT: INLINE MOVIE TAG BADGE
 // =========================================================
 const AttachedMovieBadge = ({ movie }) => {
   const navigate = useNavigate();
   if (!movie) return null;
+
   return (
     <button
       type="button"
       onClick={() => navigate(`/movie/${movie.id}`)}
-      className="mt-1.5 flex items-center gap-2 bg-white/[0.03] hover:bg-blue-600/10 border border-white/5 hover:border-blue-500/30 rounded-xl p-1 max-w-xs group shadow-sm text-left w-full transition-all duration-200"
+      className="mt-2 flex items-center gap-2.5 bg-white/[0.03] hover:bg-blue-600/10 border border-white/5 hover:border-blue-500/30 rounded-xl p-1.5 max-w-xs group relative overflow-hidden shadow-sm text-left w-full transition-all duration-200"
     >
       <img
-        src={`https://image.tmdb.org/t/p/w92${movie.poster_path}`}
-        className="w-6 h-9 object-cover rounded-lg flex-shrink-0 group-hover:scale-105 transition-transform"
+        src={`https://image.tmdb.org/t/p/w92${movie.poster_path || movie.poster}`}
+        className="w-8 h-12 object-cover rounded-lg shadow-md flex-shrink-0 group-hover:scale-105 transition-transform duration-200"
         alt=""
       />
       <div className="min-w-0 flex-1 pr-2">
@@ -94,67 +129,23 @@ const AttachedMovieBadge = ({ movie }) => {
 };
 
 // =========================================================
-// SUB-COMPONENT: INDIVIDUAL MANAGED COMMENT ITEM WITH ACTIONS
+// SUB-COMPONENT: INDIVIDUAL COMMENT BLOCK WITH LIKES AND REPLIES
 // =========================================================
-const ManagedCommentItem = ({
-  postId,
-  comment,
-  currentUser,
-  post,
-  setItemToDelete,
-}) => {
-  const [showReplies, setShowReplies] = useState(false);
-  const [replies, setReplies] = useState([]);
-  const [replyText, setReplyText] = useState("");
-  const [replyCount, setReplyCount] = useState(0);
-
-  const [replyMovie, setReplyMovie] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
+const CommentBlock = ({ post, comment, currentUser, setItemToDelete }) => {
   const navigate = useNavigate();
+  const [showReplyForm, setShowReplyForm] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [replies, setReplies] = useState([]);
 
-  const commentLikes = comment.likes || [];
-  const isCommentLikedByMe = currentUser
-    ? commentLikes.includes(currentUser.uid)
-    : false;
-
-  useEffect(() => {
-    if (searchQuery.trim().length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    const delayDebounce = setTimeout(async () => {
-      try {
-        const data = await searchMovies(searchQuery);
-        setSearchResults(data.filter((m) => m.poster_path).slice(0, 4));
-      } catch (err) {
-        console.error(err);
-      }
-    }, 400);
-    return () => clearTimeout(delayDebounce);
-  }, [searchQuery]);
+  const [replyMovieQuery, setReplyMovieQuery] = useState("");
+  const [replyMovieResults, setReplyMovieResults] = useState([]);
+  const [selectedReplyMovie, setSelectedReplyMovie] = useState(null);
 
   useEffect(() => {
     const repliesRef = collection(
       db,
       "posts",
-      postId,
-      "comments",
-      comment.id,
-      "replies",
-    );
-    const unsubscribe = onSnapshot(repliesRef, (snapshot) => {
-      setReplyCount(snapshot.size);
-    });
-    return () => unsubscribe();
-  }, [postId, comment.id]);
-
-  useEffect(() => {
-    if (!showReplies) return;
-    const repliesRef = collection(
-      db,
-      "posts",
-      postId,
+      post.id,
       "comments",
       comment.id,
       "replies",
@@ -164,424 +155,577 @@ const ManagedCommentItem = ({
       setReplies(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
     });
     return () => unsubscribe();
-  }, [showReplies, postId, comment.id]);
+  }, [post.id, comment.id]);
 
-  const handleCommentLikeToggle = async () => {
-    if (!currentUser) return alert("Please login to like this comment!");
-    const commentRef = doc(db, "posts", postId, "comments", comment.id);
-    try {
-      if (isCommentLikedByMe) {
-        await updateDoc(commentRef, { likes: arrayRemove(currentUser.uid) });
-      } else {
-        await updateDoc(commentRef, { likes: arrayUnion(currentUser.uid) });
+  useEffect(() => {
+    if (replyMovieQuery.trim().length < 2) {
+      setReplyMovieResults([]);
+      return;
+    }
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const data = await searchMovies(replyMovieQuery);
+        setReplyMovieResults(data.filter((m) => m.poster_path).slice(0, 5));
+      } catch (err) {
+        console.error(err);
       }
-    } catch (error) {
-      console.error(error);
+    }, 400);
+    return () => clearTimeout(delayDebounce);
+  }, [replyMovieQuery]);
+
+  const handleCommentLike = async () => {
+    if (!currentUser) return alert("Please login to react!");
+    const commentRef = doc(db, "posts", post.id, "comments", comment.id);
+    const hasLiked = comment.likes?.includes(currentUser.uid);
+
+    try {
+      await updateDoc(commentRef, {
+        likes: hasLiked
+          ? arrayRemove(currentUser.uid)
+          : arrayUnion(currentUser.uid),
+      });
+
+      // ⚡ Notification Trigger kapag ni-like mo ang comment ng iba
+      if (!hasLiked) {
+        await triggerNotification(
+          comment.userId,
+          currentUser,
+          "liked your comment",
+          post.id,
+        );
+      }
+    } catch (err) {
+      console.error("Error liking comment:", err);
+    }
+  };
+
+  const handleReplyLike = async (reply) => {
+    if (!currentUser) return alert("Please login to react!");
+    const replyRef = doc(
+      db,
+      "posts",
+      post.id,
+      "comments",
+      comment.id,
+      "replies",
+      reply.id,
+    );
+    const hasLiked = reply.likes?.includes(currentUser.uid);
+
+    try {
+      await updateDoc(replyRef, {
+        likes: hasLiked
+          ? arrayRemove(currentUser.uid)
+          : arrayUnion(currentUser.uid),
+      });
+
+      // ⚡ Notification Trigger kapag ni-like mo ang reply ng iba
+      if (!hasLiked) {
+        await triggerNotification(
+          reply.userId,
+          currentUser,
+          "liked your reply",
+          post.id,
+        );
+      }
+    } catch (err) {
+      console.error("Error liking reply:", err);
     }
   };
 
   const handleAddReply = async (e) => {
     e.preventDefault();
     if (!currentUser) return alert("Please login to reply!");
-    if (!replyText.trim() && !replyMovie) return;
+    if (!replyText.trim() && !selectedReplyMovie) return;
 
     try {
-      const repliesRef = collection(
-        db,
-        "posts",
-        postId,
-        "comments",
-        comment.id,
-        "replies",
-      );
-      await addDoc(repliesRef, {
+      const replyData = {
         userId: currentUser.uid,
-        userName: currentUser.displayName || "Anonymous Viber",
+        userName: currentUser.displayName || "Anonymous",
         userPhoto: currentUser.photoURL || "",
         text: replyText.trim(),
-        movie: replyMovie
-          ? {
-              id: replyMovie.id,
-              title: replyMovie.title || replyMovie.name,
-              poster_path: replyMovie.poster_path,
-              media_type: replyMovie.media_type || "movie",
-            }
-          : null,
-        createdAt: serverTimestamp(),
-      });
+        likes: [],
+        createdAt: new Date(),
+      };
+
+      if (selectedReplyMovie) {
+        replyData.movie = {
+          id: selectedReplyMovie.id,
+          title: selectedReplyMovie.title || selectedReplyMovie.name,
+          poster_path: selectedReplyMovie.poster_path,
+          media_type: selectedReplyMovie.media_type || "movie",
+        };
+      }
+
+      await addDoc(
+        collection(db, "posts", post.id, "comments", comment.id, "replies"),
+        replyData,
+      );
+
+      // ⚡ Notification Trigger kapag nireplyan mo ang comment niya
+      await triggerNotification(comment.userId, currentUser, "reply", post.id);
+
       setReplyText("");
-      setReplyMovie(null);
-    } catch (error) {
-      console.error(error);
+      setSelectedReplyMovie(null);
+      setReplyMovieQuery("");
+      setShowReplyForm(false);
+    } catch (err) {
+      console.error("Error adding reply:", err);
     }
   };
 
+  const isCommentLikedByMe = comment.likes?.includes(currentUser?.uid);
+
   return (
-    <div className="bg-white/[0.01] border border-white/[0.02] p-3 rounded-2xl space-y-1.5">
-      <div className="flex gap-3 items-start">
-        <button
-          type="button"
-          onClick={() => navigate(`/profile/${comment.userId}`)}
-          className="flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
-          title={`View ${comment.userName}'s profile`}
-        >
-          {comment.userPhoto ? (
-            <img
-              src={comment.userPhoto}
-              className="w-5 h-5 rounded-full object-cover"
-              alt=""
-            />
-          ) : (
-            <div className="w-5 h-5 rounded-full bg-blue-600/20 flex items-center justify-center text-[9px] font-black text-blue-400">
-              {comment.userName?.[0]?.toUpperCase()}
-            </div>
-          )}
-        </button>
-
-        <div className="flex-1 space-y-0.5 min-w-0">
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] font-black text-white uppercase tracking-wide truncate pr-2">
-              <UsernameDisplay
-                userId={comment.userId}
-                fallbackName={comment.userName}
-                className="text-xs sm:text-sm font-black text-white uppercase tracking-wide"
+    <div className="bg-white/[0.02] border border-white/5 p-3 rounded-2xl space-y-2">
+      <div className="flex items-center justify-between w-full">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate(`/profile/${comment.userId}`)}
+            className="flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
+          >
+            {comment.userPhoto ? (
+              <img
+                src={comment.userPhoto}
+                className="w-5 h-5 rounded-full object-cover"
+                alt=""
               />
-            </span>
+            ) : (
+              <div className="w-5 h-5 rounded-full bg-blue-600/20 flex items-center justify-center text-[9px] font-black text-blue-400">
+                {comment.userName?.[0]?.toUpperCase()}
+              </div>
+            )}
+          </button>
 
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-[7px] font-bold text-gray-600 uppercase tracking-tight">
-                {comment.createdAt
-                  ? new Date(
-                      comment.createdAt.seconds * 1000,
-                    ).toLocaleDateString()
-                  : "Now"}
-              </span>
+          <UsernameDisplay
+            userId={comment.userId}
+            fallbackName={comment.userName}
+            className="text-[10px] font-black uppercase tracking-wide text-gray-200"
+          />
+        </div>
 
-              {(currentUser?.uid === comment.userId ||
-                currentUser?.uid === post?.userId ||
-                currentUser?.uid === auth.currentUser?.uid) && (
-                <button
-                  onClick={() =>
-                    setItemToDelete({
-                      type: "comment",
-                      postId: postId,
-                      commentId: comment.id,
-                    })
-                  }
-                  className="text-gray-600 hover:text-red-500 transition-colors p-0.5"
-                  title="Delete Comment"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-[7px] font-bold text-gray-600 uppercase tracking-tight">
+            {comment.createdAt
+              ? new Date(comment.createdAt.seconds * 1000).toLocaleDateString()
+              : "Now"}
+          </span>
 
-          {comment.text && (
-            <p className="text-gray-300 text-xs font-normal leading-normal break-words">
-              {comment.text}
-            </p>
+          {(currentUser?.uid === comment.userId ||
+            currentUser?.uid === post.userId) && (
+            <button
+              onClick={() =>
+                setItemToDelete({
+                  type: "comment",
+                  postId: post.id,
+                  commentId: comment.id,
+                })
+              }
+              className="text-gray-600 hover:text-red-500 transition-colors p-1"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
           )}
-
-          <AttachedMovieBadge movie={comment.movie} />
         </div>
       </div>
 
-      <div className="flex items-center gap-3 pl-8 text-[8px] font-black uppercase tracking-wider text-gray-500">
+      <div className="pl-7">
+        {comment.text && (
+          <p className="text-xs text-gray-400 font-medium">{comment.text}</p>
+        )}
+        {comment.movie && <AttachedMovieBadge movie={comment.movie} />}
+      </div>
+
+      <div className="pl-7 flex items-center gap-4 text-[9px] font-black uppercase tracking-wider text-gray-500 pt-0.5">
         <button
-          onClick={handleCommentLikeToggle}
-          className={`hover:text-white transition-colors flex items-center gap-1 ${isCommentLikedByMe ? "text-blue-400" : ""}`}
+          onClick={handleCommentLike}
+          className={`hover:text-white transition-colors flex items-center gap-1 ${isCommentLikedByMe ? "text-rose-500 hover:text-rose-400" : ""}`}
         >
           <Heart
-            className={`w-2.5 h-2.5 ${isCommentLikedByMe ? "text-blue-400 fill-blue-400" : "text-gray-500"}`}
+            className={`w-2.5 h-2.5 ${isCommentLikedByMe ? "text-rose-500 fill-rose-500" : "text-gray-500"}`}
           />
-          {isCommentLikedByMe ? "Liked" : "Like"} ({commentLikes.length})
+          {isCommentLikedByMe ? "Liked" : "Vibe"} ({comment.likes?.length || 0})
         </button>
         <button
-          onClick={() => setShowReplies(!showReplies)}
-          className="hover:text-white transition-colors flex items-center gap-1"
+          onClick={() => setShowReplyForm(!showReplyForm)}
+          className="hover:text-blue-400 transition-colors flex items-center gap-1"
         >
           <MessageSquare className="w-2.5 h-2.5 text-gray-500" />
-          Reply {replyCount > 0 && `(${replyCount})`}
+          Reply ({replies.length})
         </button>
       </div>
 
-      {showReplies && (
-        <div className="pl-4 sm:pl-8 pt-1.5 space-y-2 border-l border-white/5 ml-2.5">
-          <div className="space-y-1.5 max-h-32 overflow-y-auto no-scrollbar">
-            {replies.map((reply) => (
+      {replies.length > 0 && (
+        <div className="pl-7 pt-2 space-y-3 border-l border-white/5 ml-3 mt-1">
+          {replies.map((reply) => {
+            const isReplyLikedByMe = reply.likes?.includes(currentUser?.uid);
+            return (
               <div
                 key={reply.id}
-                className="flex gap-2 bg-white/[0.005] p-2 rounded-xl items-start justify-between"
+                className="bg-white/[0.01] p-2.5 rounded-xl border border-white/[0.02] space-y-1.5"
               >
-                <div className="flex gap-2 items-start flex-1 min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/profile/${reply.userId}`)}
-                    className="flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
-                    title={`View ${reply.userName}'s profile`}
-                  >
-                    {reply.userPhoto ? (
-                      <img
-                        src={reply.userPhoto}
-                        className="w-4 h-4 rounded-full object-cover"
-                        alt=""
-                      />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full bg-gray-700 flex items-center justify-center text-[8px] font-bold text-gray-300">
-                        {reply.userName?.[0]?.toUpperCase()}
-                      </div>
-                    )}
-                  </button>
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/profile/${reply.userId}`)}
+                      className="flex-shrink-0 cursor-pointer active:scale-95 transition-transform"
+                    >
+                      {reply.userPhoto ? (
+                        <img
+                          src={reply.userPhoto}
+                          className="w-4 h-4 rounded-full object-cover"
+                          alt=""
+                        />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full bg-gray-700 flex items-center justify-center text-[8px] font-bold text-gray-300">
+                          {reply.userName?.[0]?.toUpperCase()}
+                        </div>
+                      )}
+                    </button>
 
-                  <div className="flex-1 min-w-0">
-                    <span className="text-[8px] font-black text-white uppercase tracking-wide block">
-                      <UsernameDisplay
-                        userId={reply.userId}
-                        fallbackName={reply.userName}
-                        className="text-xs font-black text-white uppercase tracking-wide"
-                      />
-                    </span>
-                    {reply.text && (
-                      <p className="text-gray-400 text-xs font-normal break-words leading-normal">
-                        {reply.text}
-                      </p>
-                    )}
-                    <AttachedMovieBadge movie={reply.movie} />
+                    <UsernameDisplay
+                      userId={reply.userId}
+                      fallbackName={reply.userName}
+                      className="text-[9px] font-black uppercase text-gray-400"
+                    />
                   </div>
-                </div>
 
-                <div className="flex items-center gap-1.5 flex-shrink-0 pt-0.5 pl-2">
-                  <span className="text-[7px] font-bold text-gray-600 uppercase tracking-tight">
+                  <span className="text-[7px] font-bold text-gray-600 uppercase tracking-tight flex-shrink-0">
                     {reply.createdAt
                       ? new Date(
                           reply.createdAt.seconds * 1000,
                         ).toLocaleDateString()
                       : "Now"}
                   </span>
+                </div>
+
+                <div className="pl-5">
+                  {reply.text && (
+                    <p className="text-[11px] text-gray-300 font-medium">
+                      {reply.text}
+                    </p>
+                  )}
+                  {reply.movie && <AttachedMovieBadge movie={reply.movie} />}
+                </div>
+
+                <div className="pl-5 pt-0.5 flex items-center justify-between w-full">
+                  <button
+                    onClick={() => handleReplyLike(reply)}
+                    className={`flex items-center gap-1 text-[8px] font-black uppercase tracking-widest transition-colors ${
+                      isReplyLikedByMe
+                        ? "text-rose-500 hover:text-rose-400"
+                        : "text-gray-600 hover:text-gray-400"
+                    }`}
+                  >
+                    <Heart
+                      className={`w-2.5 h-2.5 ${isReplyLikedByMe ? "fill-rose-500" : ""}`}
+                    />
+                    <span>
+                      {isReplyLikedByMe ? "Liked" : "Vibe"} (
+                      {reply.likes?.length || 0})
+                    </span>
+                  </button>
 
                   {(currentUser?.uid === reply.userId ||
-                    currentUser?.uid === post?.userId) && (
+                    currentUser?.uid === post.userId) && (
                     <button
                       onClick={() =>
                         setItemToDelete({
                           type: "reply",
-                          postId: postId,
+                          postId: post.id,
                           commentId: comment.id,
                           replyId: reply.id,
                         })
                       }
                       className="text-gray-600 hover:text-red-500 transition-colors p-0.5"
-                      title="Delete Reply"
                     >
                       <Trash2 className="w-2.5 h-2.5" />
                     </button>
                   )}
                 </div>
               </div>
-            ))}
-          </div>
-          <form onSubmit={handleAddReply} className="space-y-1 relative">
-            {replyMovie && (
-              <div className="flex items-center gap-1.5 bg-blue-600/10 border border-blue-500/20 px-2 py-0.5 rounded-lg w-fit text-[8px] text-blue-400 font-bold">
-                <Film className="w-2.5 h-2.5 text-blue-400" />
-                {replyMovie.title || replyMovie.name}
-                <button
-                  type="button"
-                  onClick={() => setReplyMovie(null)}
-                  className="text-red-500 pl-1 hover:text-red-400 transition-colors flex items-center"
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </div>
-            )}
-            <div className="flex gap-2">
-              <div className="flex-1 bg-white/5 border border-white/5 rounded-xl flex items-center px-2 sm:px-3 relative">
-                <input
-                  type="text"
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="Reply..."
-                  className="flex-1 bg-transparent py-1.5 text-xs text-gray-300 focus:outline-none placeholder-gray-600"
-                />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Film..."
-                  className="w-12 sm:w-16 bg-white/5 border border-white/5 rounded px-1 text-[7px] text-right focus:outline-none focus:border-blue-500/30 transition-all text-gray-300 placeholder-gray-600"
-                />
-                {searchResults.length > 0 && (
-                  <div className="absolute left-0 right-0 bottom-full mb-1 bg-[#141f35] border border-white/10 rounded-xl max-h-24 overflow-y-auto z-50 p-1 space-y-0.5 no-scrollbar">
-                    {searchResults.map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => {
-                          setReplyMovie(m);
-                          setSearchQuery("");
-                          setSearchResults([]);
-                        }}
-                        className="w-full flex items-center gap-1.5 p-1 hover:bg-white/5 rounded text-left text-[8px] text-gray-300 truncate"
-                      >
-                        {m.title || m.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showReplyForm && (
+        <form
+          onSubmit={handleAddReply}
+          className="pl-7 pt-2 space-y-2 relative animate-in slide-in-from-top-1 duration-150"
+        >
+          {selectedReplyMovie && (
+            <div className="bg-blue-500/10 border border-blue-500/20 p-1.5 rounded-xl flex items-center justify-between text-[10px]">
+              <span className="font-black uppercase tracking-wide text-blue-400">
+                🍿 Tagged in Reply:{" "}
+                {selectedReplyMovie.title || selectedReplyMovie.name}
+              </span>
               <button
-                type="submit"
-                disabled={!replyText.trim() && !replyMovie}
-                className="px-2.5 sm:px-3 bg-blue-600 text-white disabled:text-gray-600 rounded-xl text-[8px] font-black uppercase"
+                type="button"
+                onClick={() => setSelectedReplyMovie(null)}
+                className="text-gray-400 hover:text-white text-[9px]"
               >
-                Send
+                ✕
               </button>
             </div>
-          </form>
-        </div>
+          )}
+
+          <div className="flex gap-2 items-start">
+            <div className="flex-1 flex flex-col gap-1">
+              <input
+                type="text"
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Write a reply..."
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-[11px] focus:outline-none focus:border-blue-500 text-gray-300 placeholder-gray-600"
+                autoFocus
+              />
+              <input
+                type="text"
+                value={replyMovieQuery}
+                onChange={(e) => setReplyMovieQuery(e.target.value)}
+                placeholder="Tag film inside reply (optional)..."
+                className="w-full bg-white/[0.01] border border-white/5 rounded-lg px-3 py-1 text-[9px] focus:outline-none focus:border-blue-500/40 text-gray-500 placeholder-gray-700"
+              />
+            </div>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all shadow-md mt-0.5"
+            >
+              Reply
+            </button>
+          </div>
+
+          {replyMovieResults.length > 0 && (
+            <div className="absolute left-0 right-0 bottom-full mb-1 bg-[#121929] border border-white/10 rounded-xl max-h-32 overflow-y-auto z-[60] p-1.5 space-y-0.5 no-scrollbar shadow-2xl">
+              {replyMovieResults.map((mv) => (
+                <button
+                  key={mv.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedReplyMovie(mv);
+                    setReplyMovieResults([]);
+                    setReplyMovieQuery("");
+                  }}
+                  className="w-full flex items-center gap-2 p-1 hover:bg-white/5 rounded-lg text-left transition-all group"
+                >
+                  <img
+                    src={`https://image.tmdb.org/t/p/w92${mv.poster_path}`}
+                    className="w-4 h-6 object-cover rounded"
+                    alt=""
+                  />
+                  <span className="text-[10px] font-bold uppercase tracking-wide truncate group-hover:text-blue-400 text-gray-400">
+                    {mv.title || mv.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </form>
       )}
     </div>
   );
 };
 
 // =========================================================
-// SUB-COMPONENT: INNER MANAGEMENT CARD WITH LIKES & COMMENTS
+// SUB-COMPONENT: REUSABLE POST CARD (PANG-MANAGE EDITION)
 // =========================================================
-const ManagedPostCard = ({
+const PostCard = ({
   post,
   currentUser,
+  setItemToDelete,
   onEditTrigger,
   onDeleteTrigger,
-  setItemToDelete,
 }) => {
+  const navigate = useNavigate();
+  const [isExpanded, setIsExpanded] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
-  const [commentCount, setCommentCount] = useState(0);
+  const [comments, setComments] = useState([]);
 
-  const [commentMovie, setCommentMovie] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
+  const [commentMovieQuery, setCommentMovieQuery] = useState("");
+  const [commentMovieResults, setCommentMovieResults] = useState([]);
+  const [selectedCommentMovie, setSelectedCommentMovie] = useState(null);
 
-  const likesArray = post.likes || [];
-  const isLikedByMe = currentUser
-    ? likesArray.includes(currentUser.uid)
-    : false;
-  const likeCount = likesArray.length;
+  const textLimit = 250;
+  const isTextLong = post.content && post.content.length > textLimit;
+  const isMovieCountLong = post.movies && post.movies.length > 3;
 
-  useEffect(() => {
-    if (searchQuery.trim().length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    const delayDebounce = setTimeout(async () => {
-      try {
-        const data = await searchMovies(searchQuery);
-        setSearchResults(data.filter((m) => m.poster_path).slice(0, 4));
-      } catch (err) {
-        console.error(err);
-      }
-    }, 400);
-    return () => clearTimeout(delayDebounce);
-  }, [searchQuery]);
+  const displayText =
+    isTextLong && !isExpanded
+      ? `${post.content.slice(0, textLimit)}...`
+      : post.content;
+  const displayMovies =
+    isMovieCountLong && !isExpanded ? post.movies.slice(0, 3) : post.movies;
+  const hasMoreToSee =
+    isTextLong || (post.postType !== "watchlist" && isMovieCountLong);
 
   useEffect(() => {
-    const commentsRef = collection(db, "posts", post.id, "comments");
-    const unsubscribe = onSnapshot(commentsRef, (snapshot) => {
-      setCommentCount(snapshot.size);
-    });
-    return () => unsubscribe();
-  }, [post.id]);
-
-  useEffect(() => {
-    if (!showComments) return;
     const commentsRef = collection(db, "posts", post.id, "comments");
     const q = query(commentsRef, orderBy("createdAt", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setComments(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
     });
     return () => unsubscribe();
-  }, [showComments, post.id]);
+  }, [post.id]);
 
-  const handleLikeToggle = async () => {
-    if (!currentUser) return alert("Please login to like this post!");
-    const postDocRef = doc(db, "posts", post.id);
-    try {
-      if (isLikedByMe) {
-        await updateDoc(postDocRef, { likes: arrayRemove(currentUser.uid) });
-      } else {
-        await updateDoc(postDocRef, { likes: arrayUnion(currentUser.uid) });
+  useEffect(() => {
+    if (commentMovieQuery.trim().length < 2) {
+      setCommentMovieResults([]);
+      return;
+    }
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const data = await searchMovies(commentMovieQuery);
+        setCommentMovieResults(data.filter((m) => m.poster_path).slice(0, 5));
+      } catch (err) {
+        console.error(err);
       }
-    } catch (error) {
-      console.error(error);
+    }, 400);
+    return () => clearTimeout(delayDebounce);
+  }, [commentMovieQuery]);
+
+  const handleLike = async () => {
+    if (!currentUser) return alert("Please login to react!");
+    const postRef = doc(db, "posts", post.id);
+    const hasLiked = post.likes?.includes(currentUser.uid);
+
+    try {
+      await updateDoc(postRef, {
+        likes: hasLiked
+          ? arrayRemove(currentUser.uid)
+          : arrayUnion(currentUser.uid),
+      });
+      // 💡 Tinanggal ang notification dito dahil sarili mong post ito
+    } catch (err) {
+      console.error("Error liking post:", err);
     }
   };
 
   const handleAddComment = async (e) => {
     e.preventDefault();
     if (!currentUser) return alert("Please login to comment!");
-    if (!commentText.trim() && !commentMovie) return;
+    if (!commentText.trim() && !selectedCommentMovie) return;
 
     try {
-      const commentsRef = collection(db, "posts", post.id, "comments");
-      await addDoc(commentsRef, {
+      const commentData = {
         userId: currentUser.uid,
-        userName: currentUser.displayName || "Anonymous Viber",
+        userName: currentUser.displayName || "Anonymous",
         userPhoto: currentUser.photoURL || "",
         text: commentText.trim(),
         likes: [],
-        movie: commentMovie
-          ? {
-              id: commentMovie.id,
-              title: commentMovie.title || commentMovie.name,
-              poster_path: commentMovie.poster_path,
-              media_type: commentMovie.media_type || "movie",
-            }
-          : null,
-        createdAt: serverTimestamp(),
-      });
+        createdAt: new Date(),
+      };
+
+      if (selectedCommentMovie) {
+        commentData.movie = {
+          id: selectedCommentMovie.id,
+          title: selectedCommentMovie.title || selectedCommentMovie.name,
+          poster_path: selectedCommentMovie.poster_path,
+          media_type: selectedCommentMovie.media_type || "movie",
+        };
+      }
+
+      await addDoc(collection(db, "posts", post.id, "comments"), commentData);
+      // 💡 Tinanggal ang notification dito dahil sarili mong post ito
+
       setCommentText("");
-      setCommentMovie(null);
-    } catch (error) {
-      console.error(error);
+      setSelectedCommentMovie(null);
+      setCommentMovieQuery("");
+    } catch (err) {
+      console.error("Error adding comment:", err);
     }
   };
 
+  const isLikedByMe = post.likes?.includes(currentUser?.uid);
+  const folderCover =
+    post.watchlistMovies && post.watchlistMovies.length > 0
+      ? `https://image.tmdb.org/t/p/w500${post.watchlistMovies[0].poster}`
+      : null;
+
   return (
-    <div className="bg-white/[0.01] border border-white/5 rounded-[2rem] sm:rounded-[2.5rem] p-4 sm:p-6 space-y-4 shadow-md">
+    <div className="bg-white/[0.01] border border-white/5 rounded-[2.5rem] p-6 space-y-4 shadow-md transition-all">
+      <div className="flex items-center gap-3">
+        {post.userPhoto ? (
+          <img
+            src={post.userPhoto}
+            className="w-8 h-8 rounded-full object-cover border border-white/10"
+            alt=""
+          />
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center font-black text-xs text-blue-400">
+            {post.userName?.[0]?.toUpperCase() || "U"}
+          </div>
+        )}
+        <div>
+          <UsernameDisplay
+            userId={post.userId}
+            fallbackName={post.userName}
+            className="text-xs font-black uppercase tracking-wider text-white"
+          />
+          <p className="text-[9px] font-bold text-gray-500 uppercase mt-0.5 tracking-widest">
+            {post.createdAt
+              ? new Date(post.createdAt.seconds * 1000).toLocaleDateString()
+              : "Just Now"}
+          </p>
+        </div>
+      </div>
+
       {post.content && (
-        <p className="text-gray-300 text-xs sm:text-sm font-medium leading-relaxed whitespace-pre-wrap">
-          {post.content}
-        </p>
+        <div className="space-y-1">
+          <p className="text-gray-300 text-sm font-medium leading-relaxed whitespace-pre-wrap">
+            {displayText}
+          </p>
+          {isTextLong && !isExpanded && (
+            <button
+              onClick={() => setIsExpanded(true)}
+              className="text-blue-500 hover:text-blue-400 text-xs font-black uppercase tracking-wider mt-1 block"
+            >
+              See More...
+            </button>
+          )}
+        </div>
       )}
 
       {post.postType === "watchlist" ? (
-        <div className="pt-2 border-t border-white/5 mt-2">
-          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-            <FolderHeart className="w-3 h-3 text-blue-500" />
-            Shared Watchlist Folder:
+        <div className="pt-2 border-t border-white/5 mt-4">
+          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+            <FolderHeart className="w-3.5 h-3.5 text-blue-500" /> Shared a
+            Watchlist:
           </p>
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 inline-block max-w-xs w-full">
-            <h4 className="text-xs font-black uppercase tracking-wide text-white truncate flex items-center gap-1.5">
-              <FolderHeart className="w-3.5 h-3.5 text-gray-400" />
-              {post.watchListName}
-            </h4>
-            <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest mt-0.5 pl-5">
-              {post.watchlistMovies?.length || 0} films enclosed
-            </p>
+          <div className="relative h-48 overflow-hidden rounded-[2rem] bg-[#0f172a] border border-white/10 shadow-xl max-w-md">
+            {folderCover ? (
+              <img
+                src={folderCover}
+                className="absolute inset-0 w-full h-full object-cover opacity-30"
+                alt=""
+              />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-purple-600/10" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/50 to-transparent" />
+            <div className="absolute bottom-0 left-0 w-full p-6 z-10">
+              <h3 className="text-xl font-black text-white truncate mb-1 tracking-tighter uppercase">
+                {post.watchListName}
+              </h3>
+              <span className="px-2.5 py-0.5 bg-blue-600/20 border border-blue-500/30 rounded-full text-[9px] font-black text-blue-400 uppercase tracking-widest inline-block">
+                {post.watchlistMovies?.length || 0} Movies
+              </span>
+            </div>
           </div>
         </div>
       ) : (
         post.movies &&
         post.movies.length > 0 && (
-          <div className="pt-2 border-t border-white/5 mt-2">
-            <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-              <Clapperboard className="w-3.5 h-3.5 text-gray-600" />
-              Tagged Media ({post.movies.length}):
+          <div className="pt-2 border-t border-white/5 mt-4">
+            <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-4 flex items-center gap-1.5">
+              <Clapperboard className="w-3.5 h-3.5 text-gray-600" /> Tagged
+              Media ({post.movies.length}):
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-              {post.movies.map((mv) => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {displayMovies.map((mv) => (
                 <MovieCard
                   key={mv.id}
                   movie={{
@@ -593,74 +737,60 @@ const ManagedPostCard = ({
                 />
               ))}
             </div>
-            <div className="flex items-center justify-end text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-gray-500 italic pt-1 gap-1">
-              <Heart
-                className={`w-3 h-3 ${post.likes && post.likes.length > 0 ? "text-rose-500 fill-rose-500" : "text-gray-500"}`}
-              />
-              {post.likes && post.likes.length > 0
-                ? `${post.likes.length} ${post.likes.length === 1 ? "Vibe" : "Vibes"} received`
-                : "No vibes received yet"}
-            </div>
           </div>
         )
       )}
 
-      {/* METRICS & CALL TO ACTIONS ROW */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-white/5">
-        <div className="flex items-center gap-2">
+      {hasMoreToSee && (
+        <div className="pt-2 flex justify-center">
           <button
-            onClick={handleLikeToggle}
-            className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${isLikedByMe ? "bg-blue-600/20 border border-blue-500/40 text-blue-400" : "bg-white/5 border border-white/5 text-gray-400 hover:text-white"}`}
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="px-6 py-2 bg-white/5 hover:bg-blue-600/10 border border-white/5 hover:border-blue-500/20 rounded-full text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-blue-400 transition-all shadow-md"
           >
-            <Heart
-              className={`w-3 h-3 ${isLikedByMe ? "text-blue-400 fill-blue-400" : "text-gray-400"}`}
-            />
-            {isLikedByMe ? "Liked" : "Like"}
-          </button>
-          <button
-            onClick={() => setShowComments(!showComments)}
-            className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${showComments ? "bg-white/10 border border-white/20 text-white" : "bg-white/5 border border-white/5 text-gray-400 hover:text-white"}`}
-          >
-            <MessageSquare className="w-3 h-3" />
-            <span>Comment</span>
-            {commentCount > 0 && (
-              <span className="bg-white/10 text-white font-bold text-[8px] px-1 py-0.5 rounded">
-                {commentCount}
-              </span>
-            )}
+            {isExpanded ? "▲ Show Less" : `▼ View More content`}
           </button>
         </div>
-        <div className="text-left sm:text-right text-[8px] sm:text-[9px] font-black uppercase tracking-wider text-gray-500 italic flex items-center gap-1.5 sm:justify-end">
-          <span>
-            {likeCount === 0
-              ? "No vibes"
-              : likeCount === 1
-                ? "1 Vibe"
-                : `${likeCount} Vibes`}
-          </span>
-          <span>•</span>
-          <span>
-            {commentCount === 0
-              ? "0 Comments"
-              : commentCount === 1
-                ? "1 Comment"
-                : `${commentCount} Comments`}
-          </span>
-        </div>
+      )}
+
+      <div className="flex items-center gap-2 pt-2 border-t border-white/5 mt-2">
+        <button
+          onClick={handleLike}
+          className={`flex-1 py-2.5 rounded-xl border flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider transition-all ${
+            isLikedByMe
+              ? "bg-rose-600/10 border-rose-500/30 text-rose-500 shadow-sm"
+              : "bg-white/[0.02] border-white/5 text-gray-400 hover:text-white"
+          }`}
+        >
+          <Heart
+            className={`w-3.5 h-3.5 ${isLikedByMe ? "fill-rose-500" : ""}`}
+          />
+          <span>Vibe ({post.likes?.length || 0})</span>
+        </button>
+
+        <button
+          onClick={() => setShowComments(!showComments)}
+          className={`flex-1 py-2.5 rounded-xl border flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider transition-all ${
+            showComments
+              ? "bg-blue-600/10 border-blue-500/30 text-blue-400 shadow-sm"
+              : "bg-white/[0.02] border-white/5 text-gray-400 hover:text-white"
+          }`}
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+          <span>Comment ({comments.length})</span>
+        </button>
       </div>
 
       {showComments && (
-        <div className="pt-4 border-t border-white/5 mt-2 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="space-y-3 max-h-60 overflow-y-auto no-scrollbar pr-1">
+        <div className="pt-4 border-t border-white/5 space-y-4 animate-in fade-in duration-200">
+          <div className="space-y-3 max-h-96 overflow-y-auto pr-1 no-scrollbar">
             {comments.length === 0 ? (
-              <p className="text-gray-600 text-[9px] font-bold uppercase tracking-widest py-1 pl-1 italic">
-                No comments yet...
+              <p className="text-gray-600 text-[10px] font-black uppercase tracking-widest py-2 pl-2 italic">
+                No comments shared yet...
               </p>
             ) : (
               comments.map((comment) => (
-                <ManagedCommentItem
+                <CommentBlock
                   key={comment.id}
-                  postId={post.id}
                   post={post}
                   comment={comment}
                   currentUser={currentUser}
@@ -669,79 +799,93 @@ const ManagedPostCard = ({
               ))
             )}
           </div>
-          <form onSubmit={handleAddComment} className="space-y-2 relative">
-            {commentMovie && (
-              <div className="flex items-center gap-1.5 bg-blue-600/10 border border-blue-500/20 px-2 py-0.5 rounded-lg w-fit text-[9px] text-blue-400 font-bold">
-                <Film className="w-2.5 h-2.5 text-blue-400" />
-                {commentMovie.title || commentMovie.name}
+
+          <form
+            onSubmit={handleAddComment}
+            className="relative pt-2 border-t border-white/5 space-y-2"
+          >
+            {selectedCommentMovie && (
+              <div className="bg-blue-500/10 border border-blue-500/20 p-2 rounded-xl flex items-center justify-between text-xs">
+                <span className="font-black uppercase tracking-wide text-blue-400">
+                  🍿 Tagged Film:{" "}
+                  {selectedCommentMovie.title || selectedCommentMovie.name}
+                </span>
                 <button
                   type="button"
-                  onClick={() => setCommentMovie(null)}
-                  className="text-red-500 pl-1 hover:text-red-400 transition-colors flex items-center"
+                  onClick={() => setSelectedCommentMovie(null)}
+                  className="text-gray-400 hover:text-white text-xs font-bold"
                 >
-                  <X className="w-2.5 h-2.5" />
+                  ✕
                 </button>
               </div>
             )}
-            <div className="flex items-center gap-2">
-              <div className="flex-1 bg-white/5 border border-white/5 rounded-2xl flex items-center px-3 sm:px-4 relative">
+
+            <div className="flex gap-2 items-start">
+              <div className="flex-1 flex flex-col gap-1.5">
                 <input
                   type="text"
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Write a comment..."
-                  className="flex-1 bg-transparent py-2 sm:py-2.5 text-xs focus:outline-none text-gray-300 placeholder-gray-600"
+                  placeholder="Share your thoughts on this vibe..."
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-blue-500 text-gray-300 placeholder-gray-600"
                 />
                 <input
                   type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Film..."
-                  className="w-16 sm:w-24 bg-white/5 border border-white/5 rounded-xl px-2 py-1 text-[9px] text-right focus:outline-none focus:border-blue-500/30 transition-all"
+                  value={commentMovieQuery}
+                  onChange={(e) => setCommentMovieQuery(e.target.value)}
+                  placeholder="Attach a film card (optional)..."
+                  className="w-full bg-white/[0.01] border border-white/5 rounded-lg px-4 py-1.5 text-[10px] focus:outline-none focus:border-blue-500/40 text-gray-500 placeholder-gray-700"
                 />
-                {searchResults.length > 0 && (
-                  <div className="absolute left-0 right-0 bottom-full mb-1 bg-[#141f35] border border-white/10 rounded-xl max-h-32 overflow-y-auto z-50 p-1 space-y-0.5 no-scrollbar">
-                    {searchResults.map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => {
-                          setCommentMovie(m);
-                          setSearchQuery("");
-                          setSearchResults([]);
-                        }}
-                        className="w-full flex items-center gap-2 p-1.5 hover:bg-white/5 rounded-xl text-left text-xs text-gray-300 truncate"
-                      >
-                        {m.title || m.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
               <button
                 type="submit"
-                disabled={!commentText.trim() && !commentMovie}
-                className="px-3 py-2 sm:px-4 sm:py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-[#121a2e] disabled:border disabled:border-white/5 text-white disabled:text-gray-600 rounded-2xl text-[9px] font-black uppercase tracking-wider transition-all"
+                className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md"
               >
                 Send
               </button>
             </div>
+
+            {commentMovieResults.length > 0 && (
+              <div className="absolute left-0 right-0 bottom-full mb-1 bg-[#121929] border border-white/10 rounded-2xl max-h-40 overflow-y-auto z-[60] p-2 space-y-1 no-scrollbar shadow-2xl">
+                {commentMovieResults.map((mv) => (
+                  <button
+                    key={mv.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedCommentMovie(mv);
+                      setCommentMovieResults([]);
+                      setCommentMovieQuery("");
+                    }}
+                    className="w-full flex items-center gap-3 p-1.5 hover:bg-white/5 rounded-xl text-left transition-all group"
+                  >
+                    <img
+                      src={`https://image.tmdb.org/t/p/w92${mv.poster_path}`}
+                      className="w-6 h-9 object-cover rounded-lg shadow"
+                      alt=""
+                    />
+                    <span className="text-xs font-bold uppercase tracking-wide truncate group-hover:text-blue-400 text-gray-400">
+                      {mv.title || mv.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </form>
         </div>
       )}
 
-      {/* CORE CONTROL DELETION & EDIT TRIGGER BUTTONS */}
+      {/* CORE CONTROL PANEL: EDIT & DELETE BUTTONS AT THE BOTTOM */}
       <div className="flex items-center gap-2 pt-3 border-t border-white/5 mt-2">
         <button
           onClick={() => onEditTrigger(post)}
-          className="flex-1 py-2 sm:py-2.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 text-yellow-500 font-black uppercase tracking-widest text-[9px] sm:text-[10px] rounded-xl transition-all flex items-center justify-center gap-1.5"
+          className="flex-1 py-2.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 text-yellow-500 font-black uppercase tracking-widest text-[9px] sm:text-[10px] rounded-xl transition-all flex items-center justify-center gap-1.5"
         >
           <PencilLine className="w-3.5 h-3.5" />
           Edit Text
         </button>
         <button
           onClick={() => onDeleteTrigger(post.id)}
-          className="flex-1 py-2 sm:py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 font-black uppercase tracking-widest text-[9px] sm:text-[10px] rounded-xl transition-all flex items-center justify-center gap-1.5"
+          className="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 font-black uppercase tracking-widest text-[9px] sm:text-[10px] rounded-xl transition-all flex items-center justify-center gap-1.5"
         >
           <Trash2 className="w-3.5 h-3.5" />
           Delete Post
@@ -847,11 +991,8 @@ const ManagePost = ({ user }) => {
         showToast("Reply successfully deleted! 👋", "success");
       }
     } catch (err) {
-      console.error("Error configuration during deletion:", err);
-      showToast(
-        `Hindi nabura ang ${type === "comment" ? "komento" : "reply"}. ⚠️`,
-        "error",
-      );
+      console.error(err);
+      showToast(`Hindi nabura ang ${type}. ⚠️`, "error");
     } finally {
       setItemToDelete(null);
     }
@@ -866,10 +1007,9 @@ const ManagePost = ({ user }) => {
   }
 
   return (
-    // INAYOS ANG TOP/BOTTOM AT SIDE PADDINGS PARA RESPONSIVE SA MOBILE SCREEN SIZES
     <div className="min-h-screen bg-[#080d17] text-white px-4 py-6 sm:py-10 md:px-16 flex flex-col items-center">
       <div className="w-full max-w-2xl space-y-6">
-        {/* TOP COMPONENT HEADER LAYOUT */}
+        {/* TOP LAYOUT: HEADER AND BACK BUTTON ONLY */}
         <div className="flex flex-row items-center justify-between gap-3 mt-2 sm:mt-0">
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             <button
@@ -902,22 +1042,23 @@ const ManagePost = ({ user }) => {
             </div>
           ) : (
             myPosts.map((post) => (
-              <ManagedPostCard
+              <PostCard
                 key={post.id}
                 post={post}
                 currentUser={user}
+                setItemToDelete={setItemToDelete}
                 onEditTrigger={(p) => {
                   setEditingPost(p);
                   setEditText(p.content);
                 }}
                 onDeleteTrigger={(id) => setPostToDelete(id)}
-                setItemToDelete={setItemToDelete}
               />
             ))
           )}
         </div>
       </div>
 
+      {/* EDIT MODAL */}
       {editingPost && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-[#0e1626] border border-white/10 w-full max-w-lg rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-6 space-y-4 shadow-2xl">
@@ -950,6 +1091,7 @@ const ManagePost = ({ user }) => {
         </div>
       )}
 
+      {/* POST DELETE MODAL */}
       {postToDelete && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-[#0e1626] border border-white/10 w-full max-w-sm rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-6 text-center space-y-6 shadow-2xl">
@@ -983,6 +1125,46 @@ const ManagePost = ({ user }) => {
         </div>
       )}
 
+      {/* SUB-ITEM (COMMENT/REPLY) DELETE MODAL */}
+      {itemToDelete && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div
+            className="absolute inset-0 bg-black/85 backdrop-blur-md"
+            onClick={() => setItemToDelete(null)}
+          />
+          <div className="bg-[#0b111e] border border-white/10 w-full max-w-sm rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-6 text-center space-y-5 relative z-10 shadow-2xl">
+            <div className="w-12 h-14 bg-red-500/10 border border-red-500/20 text-red-400 rounded-full flex items-center justify-center mx-auto">
+              <Trash2 className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-xs sm:text-sm font-black uppercase italic tracking-wider text-white">
+                Delete this {itemToDelete.type}?
+              </h3>
+              <p className="text-[11px] sm:text-xs text-gray-400 font-medium leading-relaxed px-2">
+                Sigurado ka ba? Permanenteng mawawala ito.
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setItemToDelete(null)}
+                className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/5 text-gray-400 hover:text-white rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteItemDelete}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] transition-all shadow-lg"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOAST SYSTEM */}
       {toast.show && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] w-[90%] sm:w-auto pointer-events-none animate-in fade-in slide-in-from-top-4 duration-300">
           <div
@@ -994,49 +1176,6 @@ const ManagePost = ({ user }) => {
           >
             <span>{toast.type === "success" ? "⚡" : "⚠️"}</span>
             {toast.message}
-          </div>
-        </div>
-      )}
-
-      {itemToDelete && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div
-            className="absolute inset-0 bg-black/85 backdrop-blur-md"
-            onClick={() => setItemToDelete(null)}
-          />
-
-          <div className="bg-[#0b111e] border border-white/10 w-full max-w-sm rounded-[2rem] sm:rounded-[2.5rem] p-5 sm:p-6 text-center space-y-5 relative z-10 shadow-2xl">
-            <div className="w-12 h-14 bg-red-500/10 border border-red-500/20 text-red-400 rounded-full flex items-center justify-center mx-auto">
-              <Trash2 className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
-            </div>
-
-            <div className="space-y-1.5">
-              <h3 className="text-xs sm:text-sm font-black uppercase italic tracking-wider text-white">
-                Delete this {itemToDelete.type}?
-              </h3>
-              <p className="text-[11px] sm:text-xs text-gray-400 font-medium leading-relaxed px-2">
-                Are you sure? Once deleted, this {itemToDelete.type} will be
-                permanently removed.
-              </p>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setItemToDelete(null)}
-                className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/5 text-gray-400 hover:text-white rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] transition-all"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={handleExecuteItemDelete}
-                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl sm:rounded-2xl font-black uppercase tracking-widest text-[9px] sm:text-[10px] transition-all shadow-lg"
-              >
-                Delete
-              </button>
-            </div>
           </div>
         </div>
       )}
