@@ -55,70 +55,116 @@ const Home = ({ user, searchResults, searchLoading }) => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setWatchedIds([]);
+      return;
+    }
     const watchedQuery = collection(db, "users", user.uid, "watchedMovies");
-    const unsubscribe = onSnapshot(watchedQuery, (snapshot) => {
-      setWatchedIds(snapshot.docs.map((doc) => doc.id));
-    });
+    const unsubscribe = onSnapshot(
+      watchedQuery,
+      (snapshot) => {
+        setWatchedIds(snapshot.docs.map((doc) => doc.id));
+      },
+      (error) => {
+        console.warn("Watched sub-collection link held safely:", error.message);
+      },
+    );
     return () => unsubscribe();
   }, [user]);
 
   useEffect(() => {
-    if (user) {
-      const q = query(
-        collection(db, "users", user.uid, "watchlists"),
-        orderBy("createdAt", "desc"),
-      );
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const lists = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setWatchlists(lists);
-      });
-      return () => unsubscribe();
+    if (!user || !user.uid) {
+      setWatchlists([]);
+      return;
     }
+
+    const q = query(
+      collection(db, "users", user.uid, "watchlists"),
+      orderBy("createdAt", "desc"),
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        setWatchlists(
+          snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+        );
+      },
+      (error) => {
+        console.warn(
+          "Firestore Watchlist Stream halted safely:",
+          error.message,
+        );
+      },
+    );
+
+    return () => unsubscribe();
   }, [user]);
 
   useEffect(() => {
+    let active = true;
     const fetchData = async () => {
       setLoading(true);
-      const trendingData = await getTrendingMovies();
-      setTrending(trendingData);
-
-      // Initial fallback: trending muna
-      setFeaturedMovie(getDailyFeaturedMovie(trendingData));
-      setLoading(false);
+      try {
+        const trendingData = await getTrendingMovies();
+        if (!active) return;
+        setTrending(trendingData);
+        setFeaturedMovie(getDailyFeaturedMovie(trendingData));
+      } catch (err) {
+        console.error("Trending dynamic build blocked:", err);
+      } finally {
+        if (active) setLoading(false);
+      }
     };
     fetchData();
 
-    if (user) {
+    let unsubscribeRecommendations = () => {};
+
+    if (user && user.uid) {
       const q = query(
         collection(db, "users", user.uid, "watchlists"),
         orderBy("createdAt", "desc"),
         limit(1),
       );
 
-      const unsubscribe = onSnapshot(q, async (snapshot) => {
-        if (!snapshot.empty) {
-          const latestList = snapshot.docs[0].data();
-          const moviesInList = latestList.movies || [];
+      unsubscribeRecommendations = onSnapshot(
+        q,
+        async (snapshot) => {
+          if (!snapshot.empty && active) {
+            const latestList = snapshot.docs[0].data();
+            const moviesInList = latestList.movies || [];
 
-          if (moviesInList.length > 0) {
-            const lastMovieId = moviesInList[moviesInList.length - 1].id;
-            const recs = await getRecommendations(lastMovieId);
-            setRecommendations(recs);
+            if (moviesInList.length > 0) {
+              const lastMovieId = moviesInList[moviesInList.length - 1].id;
+              try {
+                const recs = await getRecommendations(lastMovieId);
+                if (!active) return;
+                setRecommendations(recs);
 
-            // DITO ANG MAGIC: Pumili ng isa mula sa Recommendations para maging Daily Best
-            if (recs.length > 0) {
-              const dailyRecPick = getDailyFeaturedMovie(recs);
-              setFeaturedMovie(dailyRecPick);
+                if (recs.length > 0) {
+                  setFeaturedMovie(getDailyFeaturedMovie(recs));
+                }
+              } catch (err) {
+                console.error("Recommendations async trap caught:", err);
+              }
             }
           }
-        }
-      });
-      return () => unsubscribe();
+        },
+        (error) => {
+          console.warn(
+            "Recommendations snapshot detached safely:",
+            error.message,
+          );
+        },
+      );
+    } else {
+      setRecommendations([]);
     }
+
+    return () => {
+      active = false;
+      unsubscribeRecommendations();
+    };
   }, [user]);
 
   if (searchResults && searchResults.length > 0) {
@@ -158,12 +204,10 @@ const Home = ({ user, searchResults, searchLoading }) => {
     setToast({ show: true, message, type });
     setTimeout(() => {
       setToast((prev) => ({ ...prev, show: false }));
-    }, 3000); // Mawawala automatic pagkatapos ng 3 seconds
+    }, 3000);
   };
 
-  // Function para i-save ang movie sa isang existing watchlist
   const handleSaveToPlaylist = async (playlistId, currentMovies = []) => {
-    // DISKARTENG FLEXIBLE: Gamitin ang selectedDetails, kung wala, gamitin ang featuredMovie
     const activeMovie = selectedDetails || featuredMovie;
 
     if (!activeMovie) {
@@ -171,7 +215,6 @@ const Home = ({ user, searchResults, searchLoading }) => {
       return;
     }
 
-    // Siguraduhing parehong Number o String ang pag-check ng ID
     const movieExists = currentMovies.some(
       (m) => String(m.id) === String(activeMovie.id),
     );
@@ -202,29 +245,26 @@ const Home = ({ user, searchResults, searchLoading }) => {
     }
   };
 
-  // Function para gumawa ng bagong playlist at i-save agad ang movie
   const handleCreateAndSave = async () => {
-    if (!newListName.trim() || !user) return;
+    if (!newListName.trim() || !user || !featuredMovie) return;
 
     const movieData = {
       id: featuredMovie.id,
-      title: featuredMovie.title,
-      poster: featuredMovie.poster_path,
-      backdrop_path: featuredMovie.backdrop_path,
-      overview: featuredMovie.overview,
+      title: featuredMovie.title || featuredMovie.name,
+      poster_path: featuredMovie.poster_path,
+      release_date:
+        featuredMovie.release_date || featuredMovie.first_air_date || "",
       addedAt: new Date().toISOString(),
     };
 
     try {
       const newList = {
-        name: newListName,
+        name: newListName.trim(),
         createdAt: new Date().toISOString(),
         movies: [movieData],
       };
 
-      // Siguraduhing sa "watchlists" collection ito papasok
       await addDoc(collection(db, "users", user.uid, "watchlists"), newList);
-
       setIsCreating(false);
       setNewListName("");
       setIsModalOpen(false);
@@ -236,11 +276,14 @@ const Home = ({ user, searchResults, searchLoading }) => {
 
   const handleViewDetails = async () => {
     if (!featuredMovie) return;
-    const details = await getMovieDetails(featuredMovie.id);
-    setSelectedDetails(details);
-    setIsDetailOpen(true);
+    try {
+      const details = await getMovieDetails(featuredMovie.id);
+      setSelectedDetails(details);
+      setIsDetailOpen(true);
+    } catch (error) {
+      console.error("Error fetching movie details:", error);
+    }
   };
-
   return (
     <div className="min-h-screen bg-[#080d17] pb-20">
       {/* 1. HERO SECTION (Daily Best) */}

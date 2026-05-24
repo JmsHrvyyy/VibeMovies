@@ -11,6 +11,8 @@ import {
   setDoc,
   deleteDoc,
   updateDoc,
+  getDoc,
+  getDocs, // ✅ CRITICAL FIX: Idinagdag para mawala ang ReferenceError
 } from "firebase/firestore";
 import { searchMovies } from "../services/api";
 import MovieCard from "../components/MovieCard";
@@ -45,38 +47,32 @@ const WatchlistPage = ({ user }) => {
     }, 3000);
   };
 
-  useEffect(() => {
-    if (!user) return;
+  // ✅ DISKARTENG PRODUKTIBO: Ginawang reusable function para matawag ulit tuwing may mutation (Add/Delete/Rename)
+  const fetchWatchlist = async () => {
+    if (!user || !user.uid) return;
+    try {
+      const q = query(
+        collection(db, "users", user.uid, "watchlists"),
+        orderBy("createdAt", "desc"),
+      );
 
-    const watchedQuery = collection(db, "users", user.uid, "watchedMovies");
-    const unsubscribeWatched = onSnapshot(watchedQuery, (snapshot) => {
-      setWatchedIds(snapshot.docs.map((doc) => doc.id));
-    });
-
-    const q = query(
-      collection(db, "users", user.uid, "watchlists"),
-      orderBy("createdAt", "desc"),
-    );
-    const unsubscribeWatchlists = onSnapshot(q, (snapshot) => {
-      const lists = snapshot.docs.map((doc) => ({
+      const querySnapshot = await getDocs(q);
+      const items = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
-      setWatchlists(lists);
 
-      if (selectedList) {
-        const updatedSelected = lists.find((l) => l.id === selectedList.id);
-        if (updatedSelected) {
-          setSelectedList(updatedSelected);
-        }
-      }
-    });
+      setWatchlists(items);
+    } catch (error) {
+      console.error("Error fetching watchlist:", error);
+    }
+  };
 
-    return () => {
-      unsubscribeWatched();
-      unsubscribeWatchlists();
-    };
-  }, [user, selectedList]);
+  useEffect(() => {
+    if (user && user.uid) {
+      fetchWatchlist();
+    }
+  }, [user]);
 
   if (!user) {
     return (
@@ -105,6 +101,13 @@ const WatchlistPage = ({ user }) => {
       const listRef = doc(db, "users", user.uid, "watchlists", listToDelete.id);
       await deleteDoc(listRef);
       setListToDelete(null);
+
+      // ✅ UI SYNC FIX: Kung ang binura ay ang kasalukuyang nakabukas na listahan, i-close ito
+      if (selectedList && selectedList.id === listToDelete.id) {
+        setSelectedList(null);
+      }
+
+      await fetchWatchlist(); // ✅ UI SYNC: Re-fetch agad para magbago ang listahan sa screen
       triggerToast("Watchlist deleted successfully!", "success");
     } catch (err) {
       console.error(err);
@@ -114,31 +117,36 @@ const WatchlistPage = ({ user }) => {
 
   const createList = async () => {
     if (!newListName.trim()) return;
-    await addDoc(collection(db, "users", user.uid, "watchlists"), {
-      name: newListName,
-      movies: [],
-      createdAt: new Date(),
-    });
-    setNewListName("");
-    setIsCreating(false);
-    triggerToast("Created new movie collection folder! 📁");
+    try {
+      await addDoc(collection(db, "users", user.uid, "watchlists"), {
+        name: newListName.trim(),
+        movies: [],
+        createdAt: new Date().toISOString(), // Ligtas na string timestamp kesa raw Object
+      });
+      setNewListName("");
+      setIsCreating(false);
+      await fetchWatchlist(); // ✅ UI SYNC: Re-fetch agad para lumitaw ang bagong folder
+      triggerToast("Created new movie collection folder! 📁");
+    } catch (error) {
+      console.error("Error creating list:", error);
+      triggerToast("Failed to create watchlist folder.", "error");
+    }
   };
 
-  // BAGONG LOGIC: May banner feedback kapag matagumpay na naidagdag ang pelikula
   const addMovieToList = async (movie) => {
     if (!selectedList) return;
 
     const newMovie = {
       id: movie.id,
-      title: movie.title,
-      poster: movie.poster_path,
-      backdrop_path: movie.backdrop_path,
-      overview: movie.overview,
+      title: movie.title || movie.name,
+      poster: movie.poster_path || "",
+      backdrop_path: movie.backdrop_path || "",
+      overview: movie.overview || "",
       rating: movie.vote_average?.toFixed(1) || "0.0",
       year: movie.release_date?.split("-")[0] || "N/A",
     };
 
-    if (selectedList.movies?.some((m) => m.id === movie.id)) {
+    if (selectedList.movies?.some((m) => String(m.id) === String(movie.id))) {
       triggerToast("Movie is already in this playlist! ⚠️", "error");
       return;
     }
@@ -154,8 +162,11 @@ const WatchlistPage = ({ user }) => {
       setSearchTerm("");
       setSearchResults([]);
 
-      // SUCCESS BANNER FOR ADDING MOVIE
-      triggerToast(`Successfully added "${movie.title}"! 🎬`, "success");
+      await fetchWatchlist(); // ✅ UI SYNC: I-sync ang kabuuang grid cards sa likod ng modal
+      triggerToast(
+        `Successfully added "${movie.title || movie.name}"! 🎬`,
+        "success",
+      );
     } catch (error) {
       console.error("Error adding movie:", error);
       triggerToast("Error linking movie to pipeline.", "error");
@@ -168,23 +179,21 @@ const WatchlistPage = ({ user }) => {
 
     if (query.length > 2) {
       const results = await searchMovies(query);
-      setSearchResults(results);
+      setSearchResults(results || []);
     } else {
       setSearchResults([]);
     }
   };
 
-  // BAGONG LOGIC: Gagawa ng custom modal trigger imbes na direktang mag-bura
   const removeMovieFromList = (movie) => {
     setMovieToRemove(movie);
   };
 
-  // Aktwal na pag-delete ng film sa loop pagka-click sa custom modal
   const handleExecuteMovieRemove = async () => {
     if (!movieToRemove || !selectedList) return;
 
     const updatedMovies = selectedList.movies.filter(
-      (m) => m.id !== movieToRemove.id,
+      (m) => String(m.id) !== String(movieToRemove.id),
     );
 
     try {
@@ -193,6 +202,7 @@ const WatchlistPage = ({ user }) => {
 
       setSelectedList((prev) => ({ ...prev, movies: updatedMovies }));
       setMovieToRemove(null);
+      await fetchWatchlist(); // ✅ UI SYNC: I-update ang home screen counter at list properties
       triggerToast("Removed movie from collection pipeline.", "success");
     } catch (error) {
       console.error("Error removing movie:", error);
@@ -200,7 +210,6 @@ const WatchlistPage = ({ user }) => {
     }
   };
 
-  // BAGONG LOGIC: Pagbabago ng pangalan ng Watchlist Folder
   const handleUpdateListName = async () => {
     if (!editNameText.trim() || editNameText.trim() === selectedList.name) {
       setIsEditingName(false);
@@ -213,6 +222,7 @@ const WatchlistPage = ({ user }) => {
 
       setSelectedList((prev) => ({ ...prev, name: editNameText.trim() }));
       setIsEditingName(false);
+      await fetchWatchlist(); // ✅ UI SYNC: Dynamic update sa main folder tab view names
       triggerToast("Watchlist renamed dynamically! 🔄", "success");
     } catch (err) {
       console.error("Error updating layout name:", err);

@@ -17,11 +17,13 @@ import Newsfeed from "./pages/Newsfeed";
 import ManagePost from "./pages/ManagePost";
 import Settings from "./pages/Settings";
 import AiDiscover from "./pages/AiDiscover";
+import ViewPost from "./pages/ViewPost";
 
 function App() {
   const [user, setUser] = useState(null);
   const [movies, setMovies] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // Para sa movie search
+  const [authLoading, setAuthLoading] = useState(true); // 🔥 PINALITAN/IDINAGDAG: Para harangin ang karera sa load
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 1024);
 
   // MGA BAGONG STATES PARA SA NICKNAME MODAL
@@ -31,31 +33,57 @@ function App() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
+      try {
+        if (currentUser) {
+          setUser(currentUser);
 
-      if (currentUser) {
-        try {
-          // Titingnan natin sa Firestore kung may record na ang user na ito
-          const docRef = doc(db, "users", currentUser.uid);
-          const docSnap = await getDoc(docRef);
+          const userDocRef = doc(db, "users", currentUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
 
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            // KUNG WALANG DISPLAYNAME SA DATABASE, IYONG PAPOPUP-IN ANG MODAL
-            if (!data.displayName) {
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+
+            // 🔥 FIX: I-check kung may 'displayName' OR 'nickname' sa database.
+            // Kung mayroon kahit alin sa dalawa, HUWAG nang ipakita ang modal (setShowNicknameModal(false)).
+            if (userData.displayName || userData.nickname) {
+              setShowNicknameModal(false);
+            } else {
               setShowNicknameModal(true);
             }
           } else {
-            // KUNG FIRST TIME LOGIN (WALA PANG DOCUMENT SA DB), PAPOPUP-IN DIN ANG MODAL
+            // Kung talagang walang record sa Firestore, gawan ng basehan
+            await setDoc(
+              userDocRef,
+              {
+                uid: currentUser.uid,
+                email: currentUser.email,
+                createdAt: new Date().toISOString(),
+                displayName: "", // Consistent na tayo sa displayName
+              },
+              { merge: true },
+            );
+
             setShowNicknameModal(true);
           }
-        } catch (error) {
-          console.error("Error checking user document:", error);
+        } else {
+          setUser(null);
+          setShowNicknameModal(false);
         }
-      } else {
-        setShowNicknameModal(false);
+      } catch (err) {
+        console.error(
+          "Safe catch: Error accessing user profile document on auth change:",
+          err,
+        );
+        // 🔥 FALLBACK SAFETY net: Kung nagkaproblema sa pagbasa ng Firestore rules sa unang segundo,
+        // huwag nating inisin ang user. Gamitin muna ang pangalan mula sa Google Auth account kung meron.
+        if (currentUser?.displayName) {
+          setShowNicknameModal(false);
+        }
+      } finally {
+        setAuthLoading(false);
       }
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -95,11 +123,24 @@ function App() {
       setMovies([]);
       return;
     }
-    setLoading(true);
+    loading(true);
     const results = await searchMovies(query);
     setMovies(results);
-    setLoading(false);
+    loading(false);
   };
+
+  // Safe blocker: Habang binabasa pa ng Firebase kung sino ang pumasok,
+  // HUWAG munang i-render ang Navbar, Sidebar, at Routes para hindi magulo ang query listeners.
+  if (authLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#080d17] text-white font-bold uppercase tracking-widest text-xs">
+        <div className="flex flex-col items-center gap-3">
+          <span className="animate-spin text-xl">⏳</span>
+          <span>Vibing with Firebase...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Router>
@@ -114,7 +155,6 @@ function App() {
         </div>
 
         <div className="flex flex-1 relative h-[calc(100vh-70px)]">
-          {/* Siguraduhing may high z-index din ang sidebar wrapper mo */}
           <Sidebar
             isOpen={isSidebarOpen}
             setIsOpen={setIsSidebarOpen}
@@ -150,6 +190,7 @@ function App() {
               />
               <Route path="/settings" element={<Settings user={user} />} />
               <Route path="/ai-discover" element={<AiDiscover user={user} />} />
+              <Route path="/post/:postId" element={<ViewPost user={user} />} />
             </Routes>
           </main>
         </div>
@@ -163,7 +204,6 @@ function App() {
           <div className="w-full max-w-md bg-[#0d1527] border border-white/5 rounded-[2rem] p-6 text-center shadow-2xl">
             <span className="text-4xl block mb-3">🎬</span>
 
-            {/* ✅ INAYOS DITO: Pinalitan ang nakasirang <Movie> ng malinis na text o text wrapper */}
             <h2 className="text-xl font-black text-white uppercase tracking-wide mb-1">
               Welcome to Movie Vibe!
             </h2>
