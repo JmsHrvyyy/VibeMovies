@@ -19,6 +19,7 @@ import {
 } from "firebase/firestore";
 import MovieCard from "../components/MovieCard";
 import ArtistCard from "../components/ArtistCard";
+import { AlertCircle, CheckCircle2, X } from "lucide-react"; // Pwede mong gamitin kung may lucide-react ka na sa setup
 
 const MovieDetails = ({ user }) => {
   const { id } = useParams();
@@ -35,6 +36,21 @@ const MovieDetails = ({ user }) => {
   const [newListName, setNewListName] = useState("");
   const [isWatched, setIsWatched] = useState(false);
   const [watchedIds, setWatchedIds] = useState([]);
+
+  // 🚀 CUSTOM VIBE NOTIFICATION STATE (MODAL TOAST SUBSTITUTE)
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+  const [modalError, setModalError] = useState(""); // Inline list validation feedback
+
+  const showToast = (message, type = "success") => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: "", type: "success" });
+    }, 4000);
+  };
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -95,7 +111,7 @@ const MovieDetails = ({ user }) => {
     return () => unsubscribe();
   }, [user]);
 
-  // 3. EARLY RETURN (Dito na siya dapat, pagkatapos ng lahat ng Hooks)
+  // EARLY RETURN (Pagkatapos ng lahat ng Hooks)
   if (!details) {
     return (
       <div className="min-h-screen bg-[#080d17] flex items-center justify-center text-blue-500 font-black italic uppercase tracking-widest">
@@ -105,11 +121,15 @@ const MovieDetails = ({ user }) => {
   }
 
   const toggleWatched = async () => {
-    if (!user) return alert("Please login first!");
+    if (!user) {
+      showToast("Authentication Required: Please login first!", "error");
+      return;
+    }
     const watchedRef = doc(db, "users", user.uid, "watchedMovies", id);
     try {
       if (isWatched) {
         await deleteDoc(watchedRef);
+        showToast("Removed from your Watched list", "success");
       } else {
         await setDoc(watchedRef, {
           id: id,
@@ -118,9 +138,11 @@ const MovieDetails = ({ user }) => {
           type: isTV ? "tv" : "movie",
           watchedAt: new Date().toISOString(),
         });
+        showToast("Marked as Watched!", "success");
       }
     } catch (error) {
       console.error(error);
+      showToast("Firestore pipeline connection error", "error");
     }
   };
 
@@ -133,21 +155,20 @@ const MovieDetails = ({ user }) => {
   const cast = details.credits?.cast || [];
 
   const handleSaveToPlaylist = async (listId, existingMovies = []) => {
-    // 1. I-check kung existing na yung movie ID sa array
+    setModalError("");
+    // I-check kung existing na yung movie ID sa array
     const isAlreadyAdded = existingMovies.some(
       (movie) => movie.id === details.id,
     );
 
     if (isAlreadyAdded) {
-      // 2. Kapag nahanap, mag-show ng message at 'wag nang ituloy ang save
-      alert("This movie is already in this playlist! 🎥");
-      return; // Stop the function here
+      setModalError("This item is already listed in this curation space! 🎥");
+      return;
     }
 
-    // 3. Kung wala pa, proceed sa pag-save
     const movieData = {
       id: details.id,
-      title: details.title,
+      title: details.title || details.name,
       poster: details.poster_path,
       addedAt: new Date().toISOString(),
     };
@@ -159,27 +180,37 @@ const MovieDetails = ({ user }) => {
       });
 
       setIsModalOpen(false);
-      alert("Successfully added to playlist! ✅");
+      showToast("Successfully added to playlist! ✅", "success");
     } catch (error) {
       console.error("Error adding movie:", error);
+      setModalError("Failed to update database profile snapshot.");
     }
   };
 
   const handleCreateAndSave = async () => {
     if (!newListName.trim()) return;
-    await addDoc(collection(db, "users", user.uid, "watchlists"), {
-      name: newListName,
-      createdAt: new Date().toISOString(),
-      movies: [
-        { id: details.id, title: details.title, poster: details.poster_path },
-      ],
-    });
-    setIsCreating(false);
-    setNewListName("");
-    setIsModalOpen(false);
+    try {
+      await addDoc(collection(db, "users", user.uid, "watchlists"), {
+        name: newListName,
+        createdAt: new Date().toISOString(),
+        movies: [
+          {
+            id: details.id,
+            title: details.title || details.name,
+            poster: details.poster_path,
+          },
+        ],
+      });
+      setIsCreating(false);
+      setNewListName("");
+      setIsModalOpen(false);
+      showToast("Playlist created and synced with attachment! 🍿", "success");
+    } catch (error) {
+      console.error(error);
+      setModalError("Failed to instantiate new list.");
+    }
   };
 
-  // Hanapin ang official YouTube Trailer o Teaser mula sa response ng api data mo
   const trailerVideo = details.videos?.results?.find(
     (vid) =>
       vid.site === "YouTube" &&
@@ -187,7 +218,29 @@ const MovieDetails = ({ user }) => {
   );
 
   return (
-    <div className="min-h-screen bg-[#080d17] text-white p-6 md:p-12">
+    <div className="min-h-screen bg-[#080d17] text-white p-6 md:p-12 relative overflow-x-hidden">
+      {/* 🔮 NEW ECOSYSTEM FLOATING TOAST SYSTEM */}
+      {toast.show && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[300] w-full max-w-sm px-4 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div
+            className={`px-5 py-4 rounded-2xl border backdrop-blur-xl flex items-center gap-3 shadow-2xl ${
+              toast.type === "error"
+                ? "bg-red-500/10 border-red-500/20 text-red-400"
+                : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+            }`}
+          >
+            {toast.type === "error" ? (
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            )}
+            <p className="text-xs font-black uppercase tracking-wider flex-1 leading-normal">
+              {toast.message}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto">
         {/* BACK BUTTON */}
         <button
@@ -213,19 +266,23 @@ const MovieDetails = ({ user }) => {
               <button
                 onClick={() => {
                   if (!user) {
-                    alert("Please Login First!");
+                    showToast(
+                      "Authentication Required: Please login first!",
+                      "error",
+                    );
                     return;
                   }
+                  setModalError("");
                   setIsModalOpen(true);
                 }}
-                className="w-full py-6 bg-blue-600 hover:bg-blue-500 text-white rounded-[2.5rem] font-black uppercase italic tracking-widest text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.3)] hover:scale-[1.02]"
+                className="w-full py-6 bg-blue-600 hover:bg-blue-500 text-white rounded-[2.5rem] font-black uppercase italic tracking-widest text-sm transition-all shadow-[0_0_30px_rgba(37,99,235,0.3)] hover:scale-[1.02] cursor-pointer"
               >
                 + Add to Watchlist
               </button>
 
               <button
                 onClick={toggleWatched}
-                className={`w-full py-5 rounded-[2.5rem] font-black uppercase italic transition-all transform hover:scale-[1.02] active:scale-95 shadow-xl border-2 flex items-center justify-center gap-2 ${
+                className={`w-full py-5 rounded-[2.5rem] font-black uppercase italic transition-all transform hover:scale-[1.02] active:scale-95 shadow-xl border-2 flex items-center justify-center gap-2 cursor-pointer ${
                   isWatched
                     ? "bg-green-600/20 border-green-500 text-green-500"
                     : "bg-white/5 border-white/10 text-white hover:border-green-500"
@@ -234,9 +291,8 @@ const MovieDetails = ({ user }) => {
                 {isWatched ? "✓ Watched" : "Mark as Watched"}
               </button>
 
-              {/* Quick Info - Vertically Stacked & Highlighted */}
+              {/* Quick Info */}
               <div className="flex flex-col gap-4 px-2">
-                {/* RATING HIGHLIGHT (TOP) */}
                 <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-[2.5rem] p-8 flex flex-col items-center justify-center shadow-2xl">
                   <p className="text-gray-500 font-black text-[10px] uppercase tracking-[0.3em] mb-2">
                     Rating Score
@@ -251,7 +307,6 @@ const MovieDetails = ({ user }) => {
                   </div>
                 </div>
 
-                {/* DURATION / SEASONS (BOTTOM) */}
                 <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5 flex flex-col items-center justify-center">
                   <p className="text-gray-500 font-black text-[9px] uppercase tracking-[0.3em] mb-1">
                     {isTV ? "Series Length" : "Duration"}
@@ -280,7 +335,6 @@ const MovieDetails = ({ user }) => {
 
           {/* RIGHT CONTENT: TITLES, BIO, CAST, & RECOMMENDATIONS */}
           <div className="md:col-span-8 lg:col-span-8 pt-4 md:order-1 order-2">
-            {/* MAIN INFO BOX */}
             <div className="bg-[#1a2235] border border-white/5 rounded-[3.5rem] p-10 md:p-14 mb-8">
               <h1 className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black uppercase italic tracking-tighter mb-4 leading-[0.9] break-words overflow-hidden">
                 {details.title || details.name}
@@ -316,7 +370,7 @@ const MovieDetails = ({ user }) => {
                 </p>
               </div>
 
-              {/* ✅ ADDED SECTION: OFFICIAL TRAILER VIDEO (MATAPOS NG OVERVIEW) */}
+              {/* TRAILER VIDEO */}
               {trailerVideo && (
                 <div className="mt-8 mb-12 space-y-4">
                   <h3 className="text-white font-black uppercase italic tracking-widest text-sm flex items-center gap-3">
@@ -335,7 +389,7 @@ const MovieDetails = ({ user }) => {
                 </div>
               )}
 
-              {/* TOP CAST SECTION */}
+              {/* TOP CAST */}
               <div className="space-y-8">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -358,7 +412,7 @@ const MovieDetails = ({ user }) => {
               </div>
             </div>
 
-            {/* MORE LIKE THIS SECTION */}
+            {/* MORE LIKE THIS */}
             <div className="px-4 space-y-8">
               <div className="flex items-center gap-4">
                 <div className="w-2.5 h-10 bg-blue-600 rounded-full shadow-[0_0_20px_rgba(37,99,235,0.5)]" />
@@ -381,42 +435,55 @@ const MovieDetails = ({ user }) => {
         </div>
       </div>
 
-      {/* PLAYLIST MODAL */}
+      {/* 🎬 MODAL PLAYLIST MANAGEMENT */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-[#080d17]/90 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="bg-[#121826] border border-white/10 w-full max-w-md rounded-[3rem] p-10 shadow-2xl">
-            <div className="flex justify-between items-center mb-10">
+          <div className="bg-[#121826] border border-white/10 w-full max-w-md rounded-[3rem] p-10 shadow-2xl space-y-6">
+            <div className="flex justify-between items-center">
               <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">
                 Save To...
               </h3>
               <button
-                onClick={() => setIsModalOpen(false)}
-                className="bg-white/5 p-3 rounded-full text-gray-500 hover:text-white transition-colors"
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setModalError("");
+                }}
+                className="bg-white/5 p-3 rounded-full text-gray-500 hover:text-white transition-colors cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
+            {/* INLINE INTERNAL ERROR MODAL INSIDE BOX */}
+            {modalError && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-[11px] font-black uppercase tracking-wide leading-tight animate-in fade-in duration-150">
+                ⚠️ {modalError}
+              </div>
+            )}
+
             {isCreating ? (
-              <div className="mb-8 space-y-4 animate-in slide-in-from-top duration-300">
+              <div className="space-y-4 animate-in slide-in-from-top duration-300">
                 <input
                   autoFocus
                   type="text"
                   placeholder="Playlist Name"
                   value={newListName}
                   onChange={(e) => setNewListName(e.target.value)}
-                  className="w-full bg-white/5 border border-blue-500/30 text-white p-5 rounded-[1.5rem] focus:border-blue-500 focus:outline-none transition-all"
+                  className="w-full bg-white/5 border border-blue-500/30 text-white p-5 rounded-[1.5rem] focus:border-blue-500 focus:outline-none transition-all text-sm font-medium"
                 />
                 <div className="flex gap-3">
                   <button
                     onClick={handleCreateAndSave}
-                    className="flex-1 py-5 bg-blue-600 text-white rounded-[1.5rem] font-black text-[11px] uppercase tracking-widest shadow-lg shadow-blue-600/30"
+                    className="flex-1 py-5 bg-blue-600 text-white rounded-[1.5rem] font-black text-[11px] uppercase tracking-widest shadow-lg shadow-blue-600/30 cursor-pointer"
                   >
                     Create
                   </button>
                   <button
-                    onClick={() => setIsCreating(false)}
-                    className="px-8 py-5 bg-white/5 text-gray-400 rounded-[1.5rem] font-black text-[11px] uppercase tracking-widest hover:bg-white/10"
+                    onClick={() => {
+                      setIsCreating(false);
+                      setModalError("");
+                    }}
+                    className="px-8 py-5 bg-white/5 text-gray-400 rounded-[1.5rem] font-black text-[11px] uppercase tracking-widest hover:bg-white/10 cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -425,7 +492,7 @@ const MovieDetails = ({ user }) => {
             ) : (
               <button
                 onClick={() => setIsCreating(true)}
-                className="w-full py-5 mb-8 bg-blue-600/10 border border-blue-600/20 text-blue-500 rounded-[1.5rem] font-black uppercase text-[11px] tracking-[0.2em] hover:bg-blue-600 hover:text-white transition-all"
+                className="w-full py-5 bg-blue-600/10 border border-blue-600/20 text-blue-500 rounded-[1.5rem] font-black uppercase text-[11px] tracking-[0.2em] hover:bg-blue-600 hover:text-white transition-all cursor-pointer"
               >
                 + Create New
               </button>
@@ -436,7 +503,7 @@ const MovieDetails = ({ user }) => {
                 <button
                   key={list.id}
                   onClick={() => handleSaveToPlaylist(list.id, list.movies)}
-                  className="w-full p-6 bg-white/5 hover:bg-blue-600/10 border border-transparent hover:border-blue-500/30 rounded-[1.8rem] text-left flex items-center justify-between group transition-all"
+                  className="w-full p-6 bg-white/5 hover:bg-blue-600/10 border border-transparent hover:border-blue-500/30 rounded-[1.8rem] text-left flex items-center justify-between group transition-all cursor-pointer"
                 >
                   <div>
                     <p className="text-white font-black text-xs uppercase tracking-widest">
@@ -446,7 +513,7 @@ const MovieDetails = ({ user }) => {
                       {list.movies?.length || 0} Movies
                     </p>
                   </div>
-                  <span className="text-blue-500 font-black opacity-0 group-hover:opacity-100 transition-all">
+                  <span className="text-blue-500 font-black text-[11px] tracking-wider opacity-0 group-hover:opacity-100 transition-all">
                     ADD
                   </span>
                 </button>

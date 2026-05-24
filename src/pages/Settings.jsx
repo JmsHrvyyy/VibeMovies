@@ -217,6 +217,82 @@ const Settings = ({ user }) => {
         </div>
       </div>
 
+      {/* 🚀 PROJECT INFO & CREDITS HUB */}
+      <div className="bg-white/[0.01] border border-white/5 rounded-[2rem] p-6 space-y-6 text-left">
+        {/* About Section */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-black uppercase tracking-widest text-blue-400">
+            🛸 About This Project
+          </h3>
+          <p className="text-xs text-gray-400 font-medium leading-relaxed">
+            This web application is a specialized community stream designed for
+            film enthusiasts, cinephiles, and developers. It enables users to
+            sync live commentary, share thoughts, curate personalized film
+            watchlists, and attach cinematic references directly to discussions
+            powered by a real-time TMDB pipeline ecosystem.
+          </p>
+        </div>
+
+        <div className="border-t border-white/5 pt-4 space-y-2">
+          <h3 className="text-xs font-black uppercase tracking-widest text-purple-400">
+            🛠️ Creator Credits
+          </h3>
+          <p className="text-xs text-gray-400 font-medium">
+            Architected and Developed by{" "}
+            <span className="text-white font-black hover:text-blue-400 transition-colors cursor-pointer">
+              JmsHrvyyy
+            </span>
+            .
+          </p>
+          <p className="text-[10px] text-gray-600 font-bold uppercase tracking-wider">
+            Built with React, Vite, Tailwind CSS, Firebase Firestore, and Lucide
+            Icons.
+          </p>
+        </div>
+
+        {/* Patch Notes Section */}
+        <div className="border-t border-white/5 pt-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-black uppercase tracking-widest text-emerald-400">
+              📦 Update Log & Patch Notes
+            </h3>
+            <span className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-[8px] font-black tracking-widest text-emerald-400 rounded-md uppercase">
+              v1.1.0 Stable
+            </span>
+          </div>
+
+          <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
+            {/* Patch 1 */}
+            <div className="space-y-1">
+              <p className="text-[10px] font-black text-gray-300 uppercase tracking-wide">
+                May 24, 2026 – Added Notification
+              </p>
+              <p className="text-xs text-gray-500 pl-2 leading-relaxed">
+                • Added a new notification system that alerts users of new comments, replies, and mentions in real-time.
+                <br />
+                • Fixed the liked posts not updating immediately after liking or unliking a post.
+                <br />
+                • Fixed white screen issue on initial load and other pages.
+                <br />
+                • Fixed various minor bugs and consoles errors.
+                <br />
+                • Change alert into Modal notifation in MovieDetails.
+              </p>
+            </div>
+
+            {/* Patch 2 */}
+            <div className="space-y-1 pt-1.5 border-t border-white/[0.02]">
+              <p className="text-[10px] font-black text-gray-300 uppercase tracking-wide">
+                May 22, 2026 – Login Bug Fixes
+              </p>
+              <p className="text-xs text-gray-500 pl-2 leading-relaxed">
+                • Resolved whitescreen when logging in with new accounts that have no displayName set.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ========================================================= */}
       {/* GLOBAL MODAL: CUSTOM ACCOUNT DEACTIVATION WINDOW */}
       {/* ========================================================= */}
