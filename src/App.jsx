@@ -18,6 +18,7 @@ import ManagePost from "./pages/ManagePost";
 import Settings from "./pages/Settings";
 import AiDiscover from "./pages/AiDiscover";
 import ViewPost from "./pages/ViewPost";
+import Admin from "./pages/Admin";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -191,6 +192,7 @@ function App() {
               <Route path="/settings" element={<Settings user={user} />} />
               <Route path="/ai-discover" element={<AiDiscover user={user} />} />
               <Route path="/post/:postId" element={<ViewPost user={user} />} />
+              <Route path="/Admin" element={<Admin user={user} />} />
             </Routes>
           </main>
         </div>

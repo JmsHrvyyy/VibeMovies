@@ -277,6 +277,8 @@ const Settings = ({ user }) => {
                 • Fixed various minor bugs and consoles errors.
                 <br />
                 • Change alert into Modal notifation in MovieDetails.
+                <br />
+                • Added Admin Page to manage posts in newsfeed.
               </p>
             </div>
 
