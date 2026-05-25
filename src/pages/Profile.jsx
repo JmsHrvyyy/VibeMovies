@@ -470,30 +470,36 @@ const Profile = ({ user }) => {
 
         {/* ACTORS */}
         <div className="bg-[#0f172a] border border-white/10 rounded-2xl md:rounded-[2.5rem] p-4 md:p-8 shadow-xl flex flex-col">
-          <div className="flex justify-between items-center mb-8 px-4">
-            <h3 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
-              <Users className="w-6 h-6 text-red-500 stroke-[2.5]" /> Top 3
-              Favorite Actors
+          {/* Header Section: Inayos ang laki ng text at paddings para compact sa CP */}
+          <div className="flex justify-between items-center mb-5 md:mb-8 px-1 md:px-4">
+            <h3 className="text-lg sm:text-xl md:text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-2 md:gap-3">
+              <Users className="w-5 h-5 md:w-6 md:h-6 text-red-500 stroke-[2.5]" />{" "}
+              Top 3 Favorite Actors
             </h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5 w-full flex-1">
+
+          {/* ⚡ GRID PIPELINE OPTIMIZATION: Ginawang grid-cols-3 agad sa mobile view para magkatabi silang tatlo */}
+          <div className="grid grid-cols-3 gap-2.5 sm:gap-4 lg:gap-5 w-full flex-1">
             {profileData.favActors?.slice(0, 3).map((actor, index) => (
               <div
                 key={`actor-${actor.id}-${index}`}
                 className="relative group w-full h-full"
               >
                 <ArtistCard artist={actor} />
+
                 {isOwnProfile && (
+                  /* ⚡ TOUCH OPTIMIZED REMOVE CONTROLS: Pinaliit ang buttons at margins para magkasya sa compact grid image layer nung card */
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       removeActor(actor.id);
                     }}
-                    className="absolute right-4 top-4 text-gray-400 hover:text-red-500 transition-colors z-20 bg-black/40 backdrop-blur-sm p-1.5 rounded-lg"
+                    /* Inurong sa top-2 right-2 at pinalitan ang opacity para laging litaw sa CP (opacity-100 md:opacity-0) gaya ng watchlist fixes natin */
+                    className="absolute right-2 top-2 z-20 text-gray-400 hover:text-red-500 transition-all bg-black/70 md:bg-black/40 backdrop-blur-sm p-1.5 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 active:scale-90"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      className="h-5 w-5"
+                      className="h-3.5 w-3.5 sm:h-4 sm:w-4" // pinaliit ang X icon sa mobile
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -509,21 +515,25 @@ const Profile = ({ user }) => {
                 )}
               </div>
             ))}
+
+            {/* Empty Slot Button Grid Box */}
             {isOwnProfile && profileData.favActors?.length < 3 && (
               <button
                 onClick={() => {
                   setModalType("actor");
                   setIsModalOpen(true);
                 }}
-                className="w-full aspect-[2/3] border-2 border-dashed border-white/10 rounded-2xl md:rounded-[2.5rem] flex flex-col items-center justify-center gap-6 hover:bg-white/5 transition-all group"
+                /* Idinagdag ang gap-3 sa mobile (gap-6 sa desktop) at pinasok sa compact rounded corners */
+                className="w-full aspect-[2/3] border-2 border-dashed border-white/10 rounded-xl md:rounded-[2.5rem] flex flex-col items-center justify-center gap-3 md:gap-6 hover:bg-white/5 transition-all group active:scale-95"
               >
-                <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <span className="text-3xl text-gray-600 group-hover:text-red-500">
+                <div className="w-10 h-10 md:w-16 md:h-16 bg-white/5 rounded-xl md:rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <span className="text-xl md:text-3xl text-gray-600 group-hover:text-red-500">
                     +
                   </span>
                 </div>
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 group-hover:text-white">
-                  Add Slot {profileData.favActors?.length + 1}
+                {/* Responsive Text Sizes: Itinago ang mahabang details sa pinakamaliliit na mobile tracking rules para hindi mag-overflow */}
+                <p className="text-[8px] sm:text-[10px] font-black uppercase tracking-wider sm:tracking-[0.3em] text-gray-500 group-hover:text-white text-center px-1">
+                  Slot {profileData.favActors?.length + 1}
                 </p>
               </button>
             )}
@@ -540,17 +550,6 @@ const Profile = ({ user }) => {
             </span>
             Top 5 Favorites
           </h3>
-          {isOwnProfile && (profileData.favMovies || []).length < 5 && (
-            <button
-              onClick={() => {
-                setModalType("movie");
-                setIsModalOpen(true);
-              }}
-              className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:scale-105"
-            >
-              + Add Movie
-            </button>
-          )}
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-6">

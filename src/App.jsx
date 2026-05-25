@@ -24,7 +24,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(false); // Para sa movie search
-  const [authLoading, setAuthLoading] = useState(true); // 🔥 PINALITAN/IDINAGDAG: Para harangin ang karera sa load
+  const [authLoading, setAuthLoading] = useState(true); // Para harangin ang karera sa load
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 1024);
 
   // MGA BAGONG STATES PARA SA NICKNAME MODAL
@@ -44,22 +44,19 @@ function App() {
           if (userDocSnap.exists()) {
             const userData = userDocSnap.data();
 
-            // 🔥 FIX: I-check kung may 'displayName' OR 'nickname' sa database.
-            // Kung mayroon kahit alin sa dalawa, HUWAG nang ipakita ang modal (setShowNicknameModal(false)).
             if (userData.displayName || userData.nickname) {
               setShowNicknameModal(false);
             } else {
               setShowNicknameModal(true);
             }
           } else {
-            // Kung talagang walang record sa Firestore, gawan ng basehan
             await setDoc(
               userDocRef,
               {
                 uid: currentUser.uid,
                 email: currentUser.email,
                 createdAt: new Date().toISOString(),
-                displayName: "", // Consistent na tayo sa displayName
+                displayName: "",
               },
               { merge: true },
             );
@@ -75,8 +72,6 @@ function App() {
           "Safe catch: Error accessing user profile document on auth change:",
           err,
         );
-        // 🔥 FALLBACK SAFETY net: Kung nagkaproblema sa pagbasa ng Firestore rules sa unang segundo,
-        // huwag nating inisin ang user. Gamitin muna ang pangalan mula sa Google Auth account kung meron.
         if (currentUser?.displayName) {
           setShowNicknameModal(false);
         }
@@ -104,13 +99,12 @@ function App() {
         { merge: true },
       );
 
-      // I-update din ang lokal na user state para mag-reflect agad
       setUser({
         ...user,
         displayName: nickname.trim(),
       });
 
-      setShowNicknameModal(false); // Isara ang modal kapag tapos na
+      setShowNicknameModal(false);
       setNickname("");
     } catch (error) {
       console.error("Error saving nickname:", error);
@@ -119,25 +113,39 @@ function App() {
     }
   };
 
+  // 椏 FIX: PATALIKURIN ANG SETTER (setLoading) HINDI ANG STATE VARIABLE (loading)
   const handleSearch = async (query) => {
     if (!query.trim()) {
       setMovies([]);
       return;
     }
-    loading(true);
+    setLoading(true); // ITINAMA: setLoading(true) imbis na loading(true)
     const results = await searchMovies(query);
     setMovies(results);
-    loading(false);
+    setLoading(false); // ITINAMA: setLoading(false) imbis na loading(false)
   };
 
-  // Safe blocker: Habang binabasa pa ng Firebase kung sino ang pumasok,
-  // HUWAG munang i-render ang Navbar, Sidebar, at Routes para hindi magulo ang query listeners.
   if (authLoading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#080d17] text-white font-bold uppercase tracking-widest text-xs">
-        <div className="flex flex-col items-center gap-3">
-          <span className="animate-spin text-xl">⏳</span>
-          <span>Vibing with Firebase...</span>
+      <div className="flex h-screen w-screen items-center justify-center bg-[#080d17] text-white">
+        <div className="flex flex-col items-center gap-5 p-8 rounded-[2.5rem] bg-[#0d1527]/50 border border-white/5 backdrop-blur-xl shadow-2xl">
+          {/* MODERN TWIN-RING NEO-SPINNER */}
+          <div className="relative w-12 h-12">
+            {/* Outer Glow Ring */}
+            <div className="absolute inset-0 rounded-full border-4 border-blue-500/10 border-t-blue-500 animate-spin" />
+            {/* Inner Counter-Rotating Ring */}
+            <div className="absolute inset-1.5 rounded-full border-4 border-transparent border-b-purple-500 animate-[spin_1s_linear_infinite_reverse]" />
+          </div>
+
+          {/* SYSTEM STATUS TEXT */}
+          <div className="text-center space-y-1">
+            <p className="font-black text-[11px] uppercase tracking-[0.25em] text-blue-400 animate-pulse">
+              VibeMovies
+            </p>
+            <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">
+              Loading...
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -198,23 +206,18 @@ function App() {
         </div>
       </div>
 
-      {/* ======================================================== */}
       {/* FIRST TIME / MISSING NICKNAME POPUP MODAL */}
-      {/* ======================================================== */}
       {showNicknameModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[9999] p-4">
           <div className="w-full max-w-md bg-[#0d1527] border border-white/5 rounded-[2rem] p-6 text-center shadow-2xl">
-            <span className="text-4xl block mb-3">🎬</span>
-
+            <span className="text-4xl block mb-3">汐</span>
             <h2 className="text-xl font-black text-white uppercase tracking-wide mb-1">
               Welcome to Movie Vibe!
             </h2>
-
             <p className="text-xs text-gray-400 max-w-xs mx-auto mb-6">
               Please Enter a Nickname to Start Vibing with the Movie Community!
               You can always change this later in your Settings.
             </p>
-
             <form onSubmit={handleSaveNickname} className="space-y-4">
               <input
                 type="text"
@@ -225,13 +228,12 @@ function App() {
                 maxLength={20}
                 className="w-full px-4 py-3.5 bg-white/5 border border-white/5 focus:border-blue-500/30 rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none transition-all text-center font-bold"
               />
-
               <button
                 type="submit"
                 disabled={isSavingNickname || !nickname.trim()}
                 className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-400 text-white rounded-xl font-black uppercase tracking-wider text-xs transition-all shadow-lg shadow-blue-600/20"
               >
-                {isSavingNickname ? "Saving Vibe..." : "Let's Vibe! 🚀"}
+                {isSavingNickname ? "Saving Vibe..." : "Let's Vibe! 噫"}
               </button>
             </form>
           </div>

@@ -262,8 +262,23 @@ const Settings = ({ user }) => {
           </div>
 
           <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
-            {/* Patch 1 */}
+
+            {/* Patch 3 */}
             <div className="space-y-1">
+              <p className="text-[10px] font-black text-gray-300 uppercase tracking-wide">
+                May 25, 2026 – Fix Bugs & Improve Mobile Responsiveness
+              </p>
+              <p className="text-xs text-gray-500 pl-2 leading-relaxed">
+                • Search bar is working again and now fully responsive and accessible on mobile devices without layout issues.
+                <br />
+                • Watched Movie Page bug fixed.
+                <br />
+                • Improved Responsiveness design in Watchlist and Profile pages.
+              </p>
+            </div>
+
+            {/* Patch 2 */}
+            <div className="space-y-1 pt-1.5 border-t border-white/[0.02]">
               <p className="text-[10px] font-black text-gray-300 uppercase tracking-wide">
                 May 24, 2026 – Added Notification
               </p>
@@ -282,7 +297,7 @@ const Settings = ({ user }) => {
               </p>
             </div>
 
-            {/* Patch 2 */}
+            {/* Patch 1 */}
             <div className="space-y-1 pt-1.5 border-t border-white/[0.02]">
               <p className="text-[10px] font-black text-gray-300 uppercase tracking-wide">
                 May 22, 2026 – Login Bug Fixes
