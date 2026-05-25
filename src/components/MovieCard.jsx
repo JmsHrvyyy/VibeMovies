@@ -1,11 +1,48 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Star } from "lucide-react";
+import { auth, db } from "../firebase";
+import { doc, onSnapshot } from "firebase/firestore";
+import { Star, CheckCircle2 } from "lucide-react";
 
-const MovieCard = ({ movie, onAddToWatchlist, isWatched }) => {
+const MovieCard = ({ movie, onAddToWatchlist }) => {
   const navigate = useNavigate();
+  const [isWatched, setIsWatched] = useState(false);
+
+  // AUTOMATED WATCHED DETECTION STREAM
+  useEffect(() => {
+    // Kumuha ng kasalukuyang naka-log in na user mula sa Firebase Auth
+    const currentUser = auth.currentUser;
+    if (!currentUser || !movie?.id) {
+      setIsWatched(false);
+      return;
+    }
+
+    // Pakinggan kung umiiral ang movie id na ito sa loob ng 'watchedMovies' sub-collection ng user
+    const watchedDocRef = doc(
+      db,
+      "users",
+      currentUser.uid,
+      "watchedMovies",
+      String(movie.id),
+    );
+
+    const unsubscribe = onSnapshot(
+      watchedDocRef,
+      (docSnap) => {
+        setIsWatched(docSnap.exists());
+      },
+      (error) => {
+        console.warn(
+          "Watched badge detection suppressed safely:",
+          error.message,
+        );
+      },
+    );
+
+    return () => unsubscribe();
+  }, [movie?.id]);
 
   const handleCardClick = () => {
-    // Kung galing sa search or artist credits, may media_type yan (movie or tv)
     const type = movie.media_type === "tv" ? "tv" : "movie";
     navigate(`/${type}/${movie.id}`);
   };
@@ -13,14 +50,16 @@ const MovieCard = ({ movie, onAddToWatchlist, isWatched }) => {
   return (
     <div
       onClick={handleCardClick}
-      className={`group relative cursor-pointer rounded-[2rem] overflow-hidden border transition-all duration-500 ${
+      className={`group relative cursor-pointer rounded-[2rem] overflow-hidden border transition-all duration-500 bg-[#0d1527]/30 ${
         isWatched
-          ? "border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.2)]"
+          ? "border-emerald-500/30 shadow-[0_0_25px_rgba(16,185,129,0.15)] bg-emerald-950/5"
           : "border-white/5 hover:border-blue-500/50"
       }`}
     >
+      {/* Dynamic Watched Neon Badge */}
       {isWatched && (
-        <div className="absolute top-4 right-4 z-10 bg-green-500 text-black px-3 py-1 rounded-full text-[10px] font-black uppercase italic shadow-lg">
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 bg-emerald-500/90 backdrop-blur-md text-black px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider italic shadow-lg shadow-emerald-500/20 animate-in fade-in zoom-in duration-300">
+          <CheckCircle2 className="w-3 h-3 text-black stroke-[3]" />
           Watched
         </div>
       )}
@@ -35,24 +74,25 @@ const MovieCard = ({ movie, onAddToWatchlist, isWatched }) => {
         alt={movie?.title || movie?.name}
         className={`w-full aspect-[2/3] object-cover transition-all duration-700 ${
           isWatched
-            ? "opacity-60 grayscale-[0.5] group-hover:grayscale-0"
-            : "group-hover:scale-110"
+            ? "opacity-50 grayscale-[0.3] group-hover:grayscale-0 group-hover:opacity-80 group-hover:scale-105"
+            : "group-hover:scale-105"
         }`}
       />
 
       {/* Overlay info on hover */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#080d17] via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-6">
-        <h3 className="text-white font-black uppercase italic text-sm truncate tracking-tighter">
+      <div className="absolute inset-0 bg-gradient-to-t from-[#080d17] via-[#080d17]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-5">
+        <h3 className="text-white font-black uppercase italic text-xs tracking-tighter leading-snug truncate">
           {movie?.title || movie?.name}
         </h3>
         <div className="flex items-center gap-2 mt-1">
           <span className="text-blue-500 font-black text-[10px] flex items-center gap-1">
-            <Star className="w-3 h-3 text-blue-500 fill-blue-500 stroke-[2.5]" />
-            {movie?.vote_average?.toFixed(1)}
+            <Star className="w-3 h-3 fill-blue-500" /> TMDB Media
           </span>
-          <span className="text-gray-400 font-bold text-[8px] uppercase tracking-widest">
-            {movie?.release_date?.split("-")[0]}
-          </span>
+          {isWatched && (
+            <span className="text-emerald-400 font-bold text-[9px] uppercase tracking-wide">
+              • Viewed
+            </span>
+          )}
         </div>
       </div>
     </div>

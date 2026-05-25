@@ -16,7 +16,9 @@ const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
   const [queryStr, setQueryStr] = useState("");
   const [notifications, setNotifications] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false); // Bagong state para sa responsive search toggle
   const dropdownRef = useRef(null);
+  const mobileSearchRef = useRef(null);
   const navigate = useNavigate();
 
   // 1. Live listening sa notifications ng kasalukuyang user
@@ -46,11 +48,17 @@ const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
     return () => unsubscribe();
   }, [user]);
 
-  // 2. Auto-close dropdown kapag pumindot sa labas ng button/box
+  // 2. Auto-close dropdown at mobile search box kapag pumindot sa labas
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setIsOpen(false);
+      }
+      if (
+        mobileSearchRef.current &&
+        !mobileSearchRef.current.contains(e.target)
+      ) {
+        setIsMobileSearchOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -72,7 +80,6 @@ const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
     }
   };
 
-  // SVG ICON PICKER - FIXED LINE 94 CORRUPTED SVG STRING
   const getNotifContext = (type) => {
     switch (type) {
       case "like_post":
@@ -205,15 +212,30 @@ const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
 
   return (
     <nav className="bg-gray-900 border-b border-gray-800 px-4 md:px-6 py-4 sticky top-0 z-50 shadow-xl">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 relative">
+        {/* LEFT: LOGO & HAMBURGER */}
         {/* LEFT: LOGO & HAMBURGER */}
         <div className="flex items-center gap-2 md:gap-4 min-w-fit">
           <button
             type="button"
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 -ml-2 text-gray-400 hover:text-white lg:hidden relative z-50 pointer-events-auto"
+            className="p-2.5 -ml-2 text-gray-400 hover:text-white lg:hidden relative z-50 pointer-events-auto rounded-xl hover:bg-white/5 transition-all flex items-center justify-center"
           >
-            <span className="text-xl">☰</span>
+            {/* 🍔 CLEAN SVG HAMBURGER MENU */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              className="w-5 h-5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+              />
+            </svg>
           </button>
           <Link
             to="/"
@@ -223,7 +245,7 @@ const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
           </Link>
         </div>
 
-        {/* MIDDLE: SEARCH BAR */}
+        {/* MIDDLE: DESKTOP SEARCH BAR */}
         <form
           onSubmit={handleSubmit}
           className="flex-1 max-w-md relative group hidden md:block"
@@ -254,11 +276,33 @@ const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
           </svg>
         </form>
 
-        {/* RIGHT SECTION: USER STATUS & NOTIFICATION BELL */}
-        <div className="flex items-center gap-3 min-w-fit">
+        {/* RIGHT SECTION: MOBILE SEARCH ICON TOGGLE, NOTIFS & PROFILE */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-fit">
+          {/* 椏 NEW: MAGNIFYING GLASS ICON PARA SA MOBILE */}
+          <button
+            type="button"
+            onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
+            className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white md:hidden transition-all flex items-center justify-center"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </button>
+
           {user ? (
             <>
-              {/* NOTIFICATION BELL CONTAINER */}
+              {/* NOTIFICATION BELL */}
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsOpen(!isOpen)}
@@ -278,14 +322,12 @@ const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
                       d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
                     />
                   </svg>
-
-                  {/* 🔴 LIVE RED DOT INDICATOR */}
                   {hasUnread && (
                     <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" />
                   )}
                 </button>
 
-                {/* NOTIFICATIONS DROPDOWN INBOX */}
+                {/* NOTIFICATIONS DROPDOWN */}
                 {isOpen && (
                   <div className="absolute right-0 mt-3 w-80 bg-[#0d1527] border border-white/5 rounded-2xl shadow-2xl overflow-hidden z-[999]">
                     <div className="p-4 border-b border-white/5 flex items-center justify-between">
@@ -298,11 +340,10 @@ const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
                         </span>
                       )}
                     </div>
-
                     <div className="max-h-80 overflow-y-auto divide-y divide-white/5">
                       {notifications.length === 0 ? (
                         <p className="text-center py-8 text-xs text-gray-500 italic">
-                          No vibe alerts yet... 🌌
+                          No vibe alerts yet... 血
                         </p>
                       ) : (
                         notifications.map((notif) => {
@@ -311,16 +352,11 @@ const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
                             <div
                               key={notif.id}
                               onClick={() => handleNotifClick(notif)}
-                              className={`p-4 flex items-start gap-3 cursor-pointer transition-colors text-left ${
-                                notif.isRead
-                                  ? "bg-transparent text-gray-400 hover:bg-white/5"
-                                  : "bg-blue-500/5 text-white hover:bg-blue-500/10"
-                              }`}
+                              className={`p-4 flex items-start gap-3 cursor-pointer transition-colors text-left ${notif.isRead ? "bg-transparent text-gray-400 hover:bg-white/5" : "bg-blue-500/5 text-white hover:bg-blue-500/10"}`}
                             >
                               <div className="mt-0.5 flex-shrink-0 bg-white/5 p-1.5 rounded-lg border border-white/5">
                                 {context.icon}
                               </div>
-
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs leading-relaxed">
                                   <span className="font-black text-blue-400 uppercase tracking-tight mr-1">
@@ -328,7 +364,6 @@ const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
                                   </span>
                                   {context.msg}
                                 </p>
-                                {/* 📅 FIXED LINE 312-313 FIRESTORE TIMESTAMP HANDLER */}
                                 <span className="text-[9px] text-gray-500 font-bold uppercase mt-1 block">
                                   {notif.createdAt?.toDate
                                     ? notif.createdAt
@@ -341,7 +376,6 @@ const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
                                       : ""}
                                 </span>
                               </div>
-
                               {!notif.isRead && (
                                 <span className="w-1.5 h-1.5 mt-2 bg-red-500 rounded-full flex-shrink-0 animate-pulse" />
                               )}
@@ -355,7 +389,7 @@ const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
               </div>
 
               {/* PROFILE CHIP */}
-              <div className="flex items-center gap-3 bg-white/5 p-1 pr-4 rounded-full border border-white/10">
+              <div className="flex items-center gap-2 sm:gap-3 bg-white/5 p-1 pr-3 sm:pr-4 rounded-full border border-white/10">
                 <Link to="/profile">
                   <img
                     src={user.photoURL}
@@ -377,6 +411,42 @@ const Navbar = ({ onSearch, isSidebarOpen, setIsSidebarOpen, user }) => {
             </button>
           )}
         </div>
+
+        {/* 椏 NEW: FLOATING MOBILE SEARCH CONTAINER */}
+        {isMobileSearchOpen && (
+          <div
+            ref={mobileSearchRef}
+            className="absolute top-full left-0 w-full px-4 py-3 bg-[#0d1527] border-b border-gray-800 md:hidden z-[999] animate-fadeIn transition-all"
+          >
+            <form onSubmit={handleSubmit} className="relative w-full">
+              <input
+                type="text"
+                placeholder="Search for movies..."
+                value={queryStr}
+                autoFocus
+                onChange={(e) => {
+                  setQueryStr(e.target.value);
+                  onSearch(e.target.value);
+                }}
+                className="w-full bg-white/5 border border-white/10 text-white text-sm px-12 py-3 rounded-full focus:outline-none focus:border-blue-500 focus:bg-white/10 transition-all"
+              />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </form>
+          </div>
+        )}
       </div>
     </nav>
   );
